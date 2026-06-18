@@ -120,3 +120,23 @@ npm run build
 ## 📄 开源协议
 
 本项目采用 [AGPL-3.0-only](LICENSE) 协议开源。
+
+---
+
+## 🤝 Friends / Links
+
+<table border="0">
+  <tbody>
+    <tr>
+      <td width="200" align="center">
+        <a href="https://linux.do" target="_blank" style="text-decoration:none;">
+          <img src="https://img.shields.io/badge/LINUX.DO-Community-000000?style=for-the-badge&logo=linux&logoColor=white" alt="LINUX.DO" />
+        </a>
+      </td>
+      <td align="left">
+        <strong><a href="https://linux.do" target="_blank">LINUX.DO</a></strong><br/>
+        真诚、友善、团结、专业，共建你我引以为荣之社区。
+      </td>
+    </tr>
+  </tbody>
+</table>
