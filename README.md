@@ -6,6 +6,7 @@
 [![Vite](https://img.shields.io/badge/Vite-6.2-646CFF.svg?logo=vite&logoColor=white)](https://vite.dev/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-3.x-38BDB8.svg?logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
 [![License](https://img.shields.io/badge/license-AGPL--3.0--only-orange.svg)](LICENSE)
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/LunarFlow42/resume-builder)
 
 一个基于 **React 19 + TypeScript + Vite** 构建的现代化、高性能的智能简历构建与职业发展规划平台。
 融合 **AI 大模型** 强大能力，首创 **SkillForge (技能熔炉)** 模块，不仅帮助求职者编写高质量简历，更能为目标岗位进行技能差距分析并生成定制化学习路径。
