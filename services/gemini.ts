@@ -1,15 +1,18 @@
-
 const AI_SETTINGS_KEY = 'resume-builder-ai-settings';
+
+export type APIProtocol = 'openai' | 'claude' | 'gemini' | 'ollama' | 'azure';
 
 export interface AISettings {
   baseUrl: string;
   apiKey: string;
   model: string;
+  apiProtocol?: APIProtocol;
 }
 
 export interface AIProfile {
   id: string;
   name: string;
+  apiProtocol?: APIProtocol;
   baseUrl: string;
   apiKey: string;
   model: string;
@@ -34,7 +37,8 @@ export interface AISettingsStore {
 const DEFAULT_SETTINGS: AISettings = {
   baseUrl: '',
   apiKey: '',
-  model: 'gemini-3-pro-preview-bs',
+  model: '',
+  apiProtocol: 'openai',
 };
 
 const generateProfileId = () => `${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
@@ -59,7 +63,8 @@ export function loadAISettingsStore(): AISettingsStore {
           name: parsed.baseUrl ? new URL(parsed.baseUrl.startsWith('http') ? parsed.baseUrl : `https://${parsed.baseUrl}`).host || '默认' : '默认',
           baseUrl: parsed.baseUrl || '',
           apiKey: parsed.apiKey || '',
-          model: parsed.model || 'gemini-3-pro-preview-bs',
+          model: parsed.model || '',
+          apiProtocol: 'openai'
         };
         const store: AISettingsStore = { activeProfileId: migrated.id, profiles: [migrated] };
         localStorage.setItem(AI_SETTINGS_KEY, JSON.stringify(store));
@@ -70,7 +75,7 @@ export function loadAISettingsStore(): AISettingsStore {
     console.error('Failed to load AI settings store:', e);
   }
   // Empty store with one blank profile
-  const blank: AIProfile = { id: generateProfileId(), name: '默认', baseUrl: '', apiKey: '', model: 'gemini-3-pro-preview-bs' };
+  const blank: AIProfile = { id: generateProfileId(), name: '默认', baseUrl: '', apiKey: '', model: '', apiProtocol: 'openai' };
   return { activeProfileId: blank.id, profiles: [blank] };
 }
 
@@ -91,7 +96,12 @@ export function loadAISettings(moduleKey?: AIModuleKey): AISettings {
   if (moduleKey && active.modelOverrides?.[moduleKey]) {
     model = active.modelOverrides[moduleKey]!;
   }
-  return { baseUrl: active.baseUrl, apiKey: active.apiKey, model };
+  return {
+    baseUrl: active.baseUrl,
+    apiKey: active.apiKey,
+    model,
+    apiProtocol: active.apiProtocol || 'openai'
+  };
 }
 
 /**
@@ -108,33 +118,63 @@ export function saveAISettings(settings: AISettings): void {
 }
 
 /**
- * 自动补全修正 base URL 路径
+ * 根据协议推导完整 API 请求 Endpoint
+ */
+export function getEndpoint(baseUrl: string, protocol: APIProtocol = 'openai', model = ''): string {
+  let u = baseUrl.trim().replace(/\/+$/, '');
+  if (!u) return '';
+  if (!/^https?:\/\//i.test(u)) {
+    u = (protocol === 'ollama' ? 'http://' : 'https://') + u;
+  }
+
+  if (protocol === 'claude') {
+    if (u.endsWith('/v1/messages') || u.endsWith('/messages')) return u;
+    if (/\/v\d+$/.test(u)) return u + '/messages';
+    return u + '/v1/messages';
+  }
+
+  if (protocol === 'gemini') {
+    if (u.includes(':generateContent')) return u;
+    const m = model ? model.trim() : '{model}';
+    if (/\/models\//.test(u)) return u + ':generateContent';
+    if (/\/v\d+[a-z]*$/.test(u)) return u + `/models/${m}:generateContent`;
+    return u + `/v1beta/models/${m}:generateContent`;
+  }
+
+  if (protocol === 'ollama') {
+    if (u.endsWith('/api/chat') || u.endsWith('/chat')) return u;
+    return u + '/api/chat';
+  }
+
+  if (protocol === 'azure') {
+    return u; // Azure endpoint contains full path
+  }
+
+  // Default 'openai'
+  if (u.endsWith('/chat/completions')) return u;
+  if (/\/v\d+$/.test(u)) return u + '/chat/completions';
+  return u + '/v1/chat/completions';
+}
+
+/**
+ * @deprecated 兼容保留
  */
 export function normalizeBaseUrl(url: string): string {
-  let u = url.trim().replace(/\/+$/, '');
-
-  if (u && !/^https?:\/\//i.test(u)) {
-    u = 'https://' + u;
-  }
-
-  if (u.endsWith('/chat/completions')) {
-    return u;
-  }
-  if (/\/v\d+$/.test(u)) {
-    return u + '/chat/completions';
-  }
-  return u + '/v1/chat/completions';
+  return getEndpoint(url, 'openai');
 }
 
 /**
  * 从 base URL 推导出模型列表端点
  */
-function getModelsEndpoint(url: string): string {
+function getModelsEndpoint(url: string, protocol: APIProtocol = 'openai'): string {
   let u = url.trim().replace(/\/+$/, '');
   if (u && !/^https?:\/\//i.test(u)) {
-    u = 'https://' + u;
+    u = (protocol === 'ollama' ? 'http://' : 'https://') + u;
   }
-  u = u.replace(/\/chat\/completions$/, '');
+  if (protocol === 'ollama') {
+    return u.replace(/\/api\/chat$/, '') + '/api/tags';
+  }
+  u = u.replace(/\/chat\/completions$/, '').replace(/\/messages$/, '');
   if (/\/v\d+$/.test(u)) return u + '/models';
   return u + '/v1/models';
 }
@@ -142,11 +182,42 @@ function getModelsEndpoint(url: string): string {
 /**
  * 获取可用模型列表
  */
-export async function fetchModelList(baseUrl: string, apiKey: string): Promise<string[]> {
-  const endpoint = getModelsEndpoint(baseUrl);
-  const response = await fetch(endpoint, {
-    headers: { 'Authorization': `Bearer ${apiKey}` },
-  });
+export async function fetchModelList(baseUrl: string, apiKey: string, protocol: APIProtocol = 'openai'): Promise<string[]> {
+  if (protocol === 'ollama') {
+    const endpoint = getModelsEndpoint(baseUrl, 'ollama');
+    const response = await fetch(endpoint);
+    if (!response.ok) throw new Error(`获取 Ollama 模型失败 (${response.status})`);
+    const data = await response.json();
+    return (data.models || []).map((m: any) => m.name).sort();
+  }
+
+  if (protocol === 'gemini') {
+    let u = baseUrl.trim().replace(/\/+$/, '');
+    if (u && !/^https?:\/\//i.test(u)) u = 'https://' + u;
+    const endpoint = `${u}/v1beta/models?key=${apiKey}`;
+    const response = await fetch(endpoint, {
+      headers: { 'x-goog-api-key': apiKey }
+    });
+    if (!response.ok) throw new Error(`获取 Gemini 模型失败 (${response.status})`);
+    const data = await response.json();
+    return (data.models || [])
+      .map((m: any) => m.name ? m.name.replace(/^models\//, '') : '')
+      .filter(Boolean)
+      .sort();
+  }
+
+  const endpoint = getModelsEndpoint(baseUrl, protocol);
+  const headers: Record<string, string> = {};
+  if (protocol === 'azure') {
+    headers['api-key'] = apiKey;
+  } else if (protocol === 'claude') {
+    headers['x-api-key'] = apiKey;
+    headers['anthropic-version'] = '2023-06-01';
+  } else {
+    headers['Authorization'] = `Bearer ${apiKey}`;
+  }
+
+  const response = await fetch(endpoint, { headers });
   if (!response.ok) {
     if (response.status === 404) {
       throw new Error('此 API 不支持获取模型列表，请手动输入模型名称');
@@ -180,7 +251,6 @@ async function fetchWithRetry(
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       const response = await fetch(input, init);
-      // 5xx 或 429 可重试
       if (response.status >= 500 || response.status === 429) {
         if (attempt < maxRetries) {
           const delay = Math.min(1000 * Math.pow(2, attempt), 4000);
@@ -200,29 +270,158 @@ async function fetchWithRetry(
   throw lastError || new Error('请求失败');
 }
 
+interface RequestPayload {
+  url: string;
+  headers: Record<string, string>;
+  body: any;
+}
+
+function buildPayload(
+  settings: AISettings,
+  messages: ChatMessage[],
+  isJson = false
+): RequestPayload {
+  const protocol = settings.apiProtocol || 'openai';
+  const model = settings.model ? settings.model.trim() : '';
+
+  if (protocol === 'claude') {
+    const systemMsg = messages.find(m => m.role === 'system');
+    const userMsgs = messages.filter(m => m.role !== 'system').map(m => ({
+      role: m.role === 'assistant' ? 'assistant' : 'user',
+      content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content)
+    }));
+
+    let systemText = typeof systemMsg?.content === 'string' ? systemMsg.content : undefined;
+    if (isJson && systemText) {
+      systemText += '\nRespond STRICTLY with valid JSON object format.';
+    }
+
+    return {
+      url: getEndpoint(settings.baseUrl, 'claude'),
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': settings.apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: {
+        model,
+        ...(systemText ? { system: systemText } : {}),
+        messages: userMsgs,
+        max_tokens: 4096,
+        temperature: 0.7,
+      }
+    };
+  }
+
+  if (protocol === 'gemini') {
+    const systemMsg = messages.find(m => m.role === 'system');
+    const userMsgs = messages.filter(m => m.role !== 'system');
+    const contents = userMsgs.map(m => ({
+      role: m.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: typeof m.content === 'string' ? m.content : JSON.stringify(m.content) }]
+    }));
+
+    let endpoint = getEndpoint(settings.baseUrl, 'gemini', model);
+    if (settings.apiKey) {
+      endpoint += `${endpoint.includes('?') ? '&' : '?'}key=${encodeURIComponent(settings.apiKey)}`;
+    }
+
+    return {
+      url: endpoint,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(settings.apiKey ? { 'x-goog-api-key': settings.apiKey } : {})
+      },
+      body: {
+        contents,
+        ...(systemMsg ? {
+          systemInstruction: { parts: [{ text: typeof systemMsg.content === 'string' ? systemMsg.content : '' }] }
+        } : {}),
+        generationConfig: {
+          temperature: 0.7,
+          ...(isJson ? { responseMimeType: 'application/json' } : {})
+        }
+      }
+    };
+  }
+
+  if (protocol === 'ollama') {
+    return {
+      url: getEndpoint(settings.baseUrl, 'ollama'),
+      headers: {
+        'Content-Type': 'application/json',
+        ...(settings.apiKey ? { 'Authorization': `Bearer ${settings.apiKey}` } : {})
+      },
+      body: {
+        model,
+        messages: messages.map(m => ({ role: m.role, content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content) })),
+        stream: false,
+        ...(isJson ? { format: 'json' } : {})
+      }
+    };
+  }
+
+  // OpenAI & Azure
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  if (protocol === 'azure') {
+    headers['api-key'] = settings.apiKey;
+  } else {
+    headers['Authorization'] = `Bearer ${settings.apiKey}`;
+  }
+
+  const body: any = {
+    model,
+    messages,
+    temperature: 0.7,
+  };
+  if (isJson) {
+    body.response_format = { type: 'json_object' };
+  }
+
+  return {
+    url: getEndpoint(settings.baseUrl, protocol),
+    headers,
+    body,
+  };
+}
+
+function parseResponse(data: any, protocol: APIProtocol = 'openai'): string {
+  if (protocol === 'claude') {
+    const textPart = data.content?.find((c: any) => c.type === 'text') || data.content?.[0];
+    return textPart?.text?.trim() || '';
+  }
+  if (protocol === 'gemini') {
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    return text?.trim() || '';
+  }
+  if (protocol === 'ollama') {
+    return data.message?.content?.trim() || '';
+  }
+  // OpenAI & Azure
+  return data.choices?.[0]?.message?.content?.trim() || '';
+}
+
 /**
  * 带历史消息的对话式调用
  */
 export async function chatWithAI(messages: ChatMessage[], moduleKey?: AIModuleKey): Promise<string> {
   const settings = loadAISettings(moduleKey);
 
-  if (!settings.baseUrl || !settings.apiKey) {
+  if (!settings.baseUrl && settings.apiProtocol !== 'ollama') {
     throw new Error('请先配置 AI 设置（Base URL 和 API Key）');
   }
+  if (!settings.model) {
+    throw new Error('请先在 AI 设置中填写或选择模型名称');
+  }
 
-  const endpoint = normalizeBaseUrl(settings.baseUrl);
+  const payload = buildPayload(settings, messages, false);
 
-  const response = await fetchWithRetry(endpoint, {
+  const response = await fetchWithRetry(payload.url, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${settings.apiKey}`,
-    },
-    body: JSON.stringify({
-      model: settings.model || 'gemini-3-pro-preview-bs',
-      messages,
-      temperature: 0.7,
-    }),
+    headers: payload.headers,
+    body: JSON.stringify(payload.body),
   });
 
   if (!response.ok) {
@@ -231,7 +430,7 @@ export async function chatWithAI(messages: ChatMessage[], moduleKey?: AIModuleKe
   }
 
   const data = await response.json();
-  const result = data.choices?.[0]?.message?.content?.trim();
+  const result = parseResponse(data, settings.apiProtocol);
   if (!result) {
     throw new Error('API 返回内容为空');
   }
@@ -240,43 +439,67 @@ export async function chatWithAI(messages: ChatMessage[], moduleKey?: AIModuleKe
 
 /**
  * 请求 AI 返回 JSON 格式响应并解析为指定类型
- * 兼容所有 OpenAI 兼容 API，通过 system prompt 描述 JSON schema
  */
 export async function chatWithAIJson<T>(messages: ChatMessage[], moduleKey?: AIModuleKey): Promise<T> {
   const settings = loadAISettings(moduleKey);
 
-  if (!settings.baseUrl || !settings.apiKey) {
+  if (!settings.baseUrl && settings.apiProtocol !== 'ollama') {
     throw new Error('请先配置 AI 设置（Base URL 和 API Key）');
   }
+  if (!settings.model) {
+    throw new Error('请先在 AI 设置中填写或选择模型名称');
+  }
 
-  const endpoint = normalizeBaseUrl(settings.baseUrl);
+  let payload = buildPayload(settings, messages, true);
+  let response: Response;
 
-  const response = await fetchWithRetry(endpoint, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${settings.apiKey}`,
-    },
-    body: JSON.stringify({
-      model: settings.model || 'gemini-3-pro-preview-bs',
-      messages,
-      temperature: 0.7,
-      response_format: { type: 'json_object' },
-    }),
-  });
+  try {
+    response = await fetchWithRetry(payload.url, {
+      method: 'POST',
+      headers: payload.headers,
+      body: JSON.stringify(payload.body),
+    });
+  } catch (err) {
+    // 自动降级：去掉 response_format 重试
+    if (settings.apiProtocol === 'openai' || !settings.apiProtocol) {
+      payload = buildPayload(settings, messages, false);
+      response = await fetchWithRetry(payload.url, {
+        method: 'POST',
+        headers: payload.headers,
+        body: JSON.stringify(payload.body),
+      });
+    } else {
+      throw err;
+    }
+  }
 
   if (!response.ok) {
-    const errBody = await response.text();
-    throw new Error(`API 请求失败 (${response.status}): ${errBody.slice(0, 300)}`);
+    // 自动降级：某些第三方代理接口不支持 response_format，遭遇 400/422 时去掉重试
+    if ((response.status === 400 || response.status === 422) && (settings.apiProtocol === 'openai' || !settings.apiProtocol)) {
+      payload = buildPayload(settings, messages, false);
+      const fallbackResp = await fetchWithRetry(payload.url, {
+        method: 'POST',
+        headers: payload.headers,
+        body: JSON.stringify(payload.body),
+      });
+      if (fallbackResp.ok) {
+        response = fallbackResp;
+      } else {
+        const errBody = await response.text();
+        throw new Error(`API 请求失败 (${response.status}): ${errBody.slice(0, 300)}`);
+      }
+    } else {
+      const errBody = await response.text();
+      throw new Error(`API 请求失败 (${response.status}): ${errBody.slice(0, 300)}`);
+    }
   }
 
   const data = await response.json();
-  const content = data.choices?.[0]?.message?.content?.trim();
+  const content = parseResponse(data, settings.apiProtocol);
   if (!content) {
     throw new Error('API 返回内容为空');
   }
 
-  // 容错处理：去掉 markdown 代码块包裹
   let jsonStr = content;
   const fenceMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
   if (fenceMatch) {
@@ -291,50 +514,15 @@ export async function chatWithAIJson<T>(messages: ChatMessage[], moduleKey?: AIM
 }
 
 export async function optimizeResumeText(text: string, context: string): Promise<string> {
-  const settings = loadAISettings('resume');
-
-  if (!settings.baseUrl || !settings.apiKey) {
-    throw new Error('请先配置 AI 设置（Base URL 和 API Key）');
-  }
-
-  const endpoint = normalizeBaseUrl(settings.baseUrl);
-
-  try {
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${settings.apiKey}`,
-      },
-      body: JSON.stringify({
-        model: settings.model || 'gemini-3-pro-preview-bs',
-        messages: [
-          {
-            role: 'system',
-            content: '你是一名专业的简历顾问。请优化用户提供的简历内容。要求：1. 语言更专业、精炼。2. 突出成就和可量化的结果。3. 保持真实的背景信息。4. 返回优化后的纯文本，不要带有Markdown标签或多余解释。'
-          },
-          {
-            role: 'user',
-            content: `简历板块：${context}\n原始内容：${text}`
-          }
-        ],
-        temperature: 0.7,
-      }),
-    });
-
-    if (!response.ok) {
-      const errBody = await response.text();
-      throw new Error(`API 请求失败 (${response.status}): ${errBody.slice(0, 300)}`);
+  const messages: ChatMessage[] = [
+    {
+      role: 'system',
+      content: '你是一名专业的简历顾问。请优化用户提供的简历内容。要求：1. 语言更专业、精炼。2. 突出成就和可量化的结果。3. 保持真实的背景信息。4. 返回优化后的纯文本，不要带有Markdown标签或多余解释。'
+    },
+    {
+      role: 'user',
+      content: `简历板块：${context}\n原始内容：${text}`
     }
-
-    const data = await response.json();
-    const result = data.choices?.[0]?.message?.content?.trim();
-    if (!result) {
-      throw new Error('API 返回内容为空');
-    }
-    return result;
-  } catch (error) {
-    console.error('AI optimization failed:', error);
-    throw error;
-  }
+  ];
+  return chatWithAI(messages, 'resume');
 }

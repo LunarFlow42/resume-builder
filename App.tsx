@@ -5,7 +5,7 @@ import ResumePreview from './components/ResumePreview';
 import SkillForgeApp from './components/skillforge/SkillForgeApp';
 import { INITIAL_DATA } from './constants';
 import { ResumeData, ResumeVersion, StorageData } from './types';
-import { loadAISettings, loadAISettingsStore, saveAISettingsStore, normalizeBaseUrl, fetchModelList, AI_MODULES, type AISettings, type AIProfile, type AISettingsStore, type AIModuleKey } from './services/gemini';
+import { loadAISettings, loadAISettingsStore, saveAISettingsStore, normalizeBaseUrl, getEndpoint, fetchModelList, chatWithAI, AI_MODULES, type AISettings, type AIProfile, type AISettingsStore, type AIModuleKey, type APIProtocol } from './services/gemini';
 import { loadState, saveState } from './services/skillForgeStorage';
 
 type ActiveTab = 'resume' | 'skillforge';
@@ -258,8 +258,9 @@ const App: React.FC = () => {
   const [showAISettings, setShowAISettings] = useState(false);
   const [aiStore, setAiStore] = useState<AISettingsStore>(loadAISettingsStore);
   const [urlPreview, setUrlPreview] = useState(() => {
-    const s = loadAISettings();
-    return s.baseUrl ? normalizeBaseUrl(s.baseUrl) : '';
+    const store = loadAISettingsStore();
+    const active = store.profiles.find(p => p.id === store.activeProfileId) || store.profiles[0];
+    return active?.baseUrl ? getEndpoint(active.baseUrl, active.apiProtocol || 'openai', active.model) : '';
   });
   const [modelList, setModelList] = useState<string[]>(() => {
     const store = loadAISettingsStore();
@@ -292,12 +293,12 @@ const App: React.FC = () => {
     const profile = aiStore.profiles.find(p => p.id === id);
     setModelList(profile?.cachedModels || []);
     setModelError('');
-    setUrlPreview(profile?.baseUrl ? normalizeBaseUrl(profile.baseUrl) : '');
+    setUrlPreview(profile?.baseUrl ? getEndpoint(profile.baseUrl, profile.apiProtocol || 'openai', profile.model) : '');
   };
 
   const addProfile = () => {
     const id = `${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
-    const newProfile: AIProfile = { id, name: `配置 ${aiStore.profiles.length + 1}`, baseUrl: '', apiKey: '', model: 'gemini-3-pro-preview-bs' };
+    const newProfile: AIProfile = { id, name: `配置 ${aiStore.profiles.length + 1}`, baseUrl: '', apiKey: '', model: 'gemini-3-pro-preview-bs', apiProtocol: 'openai' };
     setAiStore(prev => {
       const newStore = { activeProfileId: id, profiles: [...prev.profiles, newProfile] };
       saveAISettingsStore(newStore);
@@ -316,7 +317,7 @@ const App: React.FC = () => {
       const newStore = { activeProfileId: newActiveId, profiles: remaining };
       saveAISettingsStore(newStore);
       const active = remaining.find(p => p.id === newActiveId);
-      setUrlPreview(active?.baseUrl ? normalizeBaseUrl(active.baseUrl) : '');
+      setUrlPreview(active?.baseUrl ? getEndpoint(active.baseUrl, active.apiProtocol || 'openai', active.model) : '');
       return newStore;
     });
     setModelList([]);
@@ -827,19 +828,58 @@ const App: React.FC = () => {
                       />
                     </div>
 
+                    {/* API 协议类型 */}
+                    <div>
+                      <label className={`text-xs ${darkMode ? 'text-slate-400' : 'text-gray-500'} mb-1 block`}>API 协议格式</label>
+                      <select
+                        value={activeProfile.apiProtocol || 'openai'}
+                        className={`w-full border p-2 rounded text-sm focus:border-violet-400 outline-none ${
+                          darkMode ? 'bg-slate-900 border-slate-600 text-slate-200' : 'bg-white border-gray-300 text-gray-800'
+                        }`}
+                        onChange={e => {
+                          const proto = e.target.value as APIProtocol;
+                          const updates: Partial<AIProfile> = { apiProtocol: proto };
+                          if (proto === 'claude' && (!activeProfile.baseUrl || activeProfile.baseUrl.includes('openai'))) {
+                            updates.baseUrl = 'https://api.anthropic.com';
+                            updates.model = 'claude-3-5-sonnet-20241022';
+                          } else if (proto === 'gemini' && (!activeProfile.baseUrl || activeProfile.baseUrl.includes('openai'))) {
+                            updates.baseUrl = 'https://generativelanguage.googleapis.com';
+                            updates.model = 'gemini-1.5-pro';
+                          } else if (proto === 'ollama' && (!activeProfile.baseUrl || activeProfile.baseUrl.includes('openai'))) {
+                            updates.baseUrl = 'http://localhost:11434';
+                            updates.model = 'llama3.2';
+                          }
+                          updateActiveProfile(updates);
+                          const nextUrl = updates.baseUrl !== undefined ? updates.baseUrl : activeProfile.baseUrl;
+                          const nextModel = updates.model !== undefined ? updates.model : activeProfile.model;
+                          setUrlPreview(nextUrl.trim() ? getEndpoint(nextUrl, proto, nextModel) : '');
+                        }}
+                      >
+                        <option value="openai">OpenAI 兼容 (DeepSeek/Qwen/Moonshot/OneAPI/Groq等)</option>
+                        <option value="claude">Anthropic Claude 原生格式 (/v1/messages)</option>
+                        <option value="gemini">Google Gemini 原生格式 (generateContent)</option>
+                        <option value="ollama">Ollama 本地原生格式 (/api/chat)</option>
+                        <option value="azure">Azure OpenAI (api-key Header)</option>
+                      </select>
+                    </div>
+
                     {/* Base URL */}
                     <div>
                       <label className={`text-xs ${darkMode ? 'text-slate-400' : 'text-gray-500'} mb-1 block`}>Base URL</label>
                       <input
                         type="text"
                         value={activeProfile.baseUrl}
-                        placeholder="https://api.openai.com"
+                        placeholder={
+                          activeProfile.apiProtocol === 'claude' ? 'https://api.anthropic.com' :
+                          activeProfile.apiProtocol === 'gemini' ? 'https://generativelanguage.googleapis.com' :
+                          activeProfile.apiProtocol === 'ollama' ? 'http://localhost:11434' : 'https://api.openai.com'
+                        }
                         className={`w-full border p-2 rounded text-sm focus:border-violet-400 outline-none ${
                           darkMode ? 'bg-slate-900 border-slate-600 text-slate-200 placeholder-slate-600' : 'bg-white border-gray-300 text-gray-800 placeholder-gray-400'
                         }`}
                         onChange={e => {
                           updateActiveProfile({ baseUrl: e.target.value });
-                          setUrlPreview(e.target.value.trim() ? normalizeBaseUrl(e.target.value) : '');
+                          setUrlPreview(e.target.value.trim() ? getEndpoint(e.target.value, activeProfile.apiProtocol || 'openai', activeProfile.model) : '');
                         }}
                       />
                       {urlPreview && (
@@ -851,11 +891,13 @@ const App: React.FC = () => {
 
                     {/* API Key */}
                     <div>
-                      <label className={`text-xs ${darkMode ? 'text-slate-400' : 'text-gray-500'} mb-1 block`}>API Key</label>
+                      <label className={`text-xs ${darkMode ? 'text-slate-400' : 'text-gray-500'} mb-1 block`}>
+                        API Key {activeProfile.apiProtocol === 'ollama' && <span className="opacity-60">(本地免填)</span>}
+                      </label>
                       <input
                         type="password"
                         value={activeProfile.apiKey}
-                        placeholder="sk-..."
+                        placeholder={activeProfile.apiProtocol === 'ollama' ? '可选' : 'sk-...'}
                         className={`w-full border p-2 rounded text-sm focus:border-violet-400 outline-none ${
                           darkMode ? 'bg-slate-900 border-slate-600 text-slate-200 placeholder-slate-600' : 'bg-white border-gray-300 text-gray-800 placeholder-gray-400'
                         }`}
@@ -869,14 +911,14 @@ const App: React.FC = () => {
                         <label className={`text-xs ${darkMode ? 'text-slate-400' : 'text-gray-500'}`}>模型名称</label>
                         <button
                           onClick={async () => {
-                            if (!activeProfile.baseUrl || !activeProfile.apiKey) {
-                              setModelError('请先填写 Base URL 和 API Key');
+                            if (!activeProfile.baseUrl && activeProfile.apiProtocol !== 'ollama') {
+                              setModelError('请先填写 Base URL');
                               return;
                             }
                             setModelLoading(true);
                             setModelError('');
                             try {
-                              const models = await fetchModelList(activeProfile.baseUrl, activeProfile.apiKey);
+                              const models = await fetchModelList(activeProfile.baseUrl, activeProfile.apiKey, activeProfile.apiProtocol || 'openai');
                               setModelList(models);
                               updateActiveProfile({ cachedModels: models });
                               if (models.length === 0) setModelError('API 返回的模型列表为空');
@@ -916,11 +958,14 @@ const App: React.FC = () => {
                         <input
                           type="text"
                           value={activeProfile.model}
-                          placeholder="gemini-3-pro-preview-bs"
+                          placeholder=""
                           className={`w-full border p-2 rounded text-sm focus:border-violet-400 outline-none ${
                             darkMode ? 'bg-slate-900 border-slate-600 text-slate-200 placeholder-slate-600' : 'bg-white border-gray-300 text-gray-800 placeholder-gray-400'
                           }`}
-                          onChange={e => updateActiveProfile({ model: e.target.value })}
+                          onChange={e => {
+                            updateActiveProfile({ model: e.target.value });
+                            setUrlPreview(activeProfile.baseUrl.trim() ? getEndpoint(activeProfile.baseUrl, activeProfile.apiProtocol || 'openai', e.target.value) : '');
+                          }}
                         />
                       )}
                       {modelError && (
@@ -976,7 +1021,7 @@ const App: React.FC = () => {
                                 <input
                                   type="text"
                                   value={overrideVal}
-                                  placeholder={activeProfile?.model || '默认模型'}
+                                  placeholder=""
                                   className={selectCls}
                                   onChange={e => handleChange(e.target.value)}
                                 />
@@ -994,30 +1039,17 @@ const App: React.FC = () => {
                       <p className={`text-[10px] ${darkMode ? 'text-slate-500' : 'text-gray-400'}`}>自动保存到浏览器本地</p>
                       <button
                         onClick={async () => {
-                          if (!activeProfile.baseUrl || !activeProfile.apiKey) {
-                            alert('请先填写 Base URL 和 API Key');
+                          if (!activeProfile.baseUrl && activeProfile.apiProtocol !== 'ollama') {
+                            alert('请先填写 Base URL');
+                            return;
+                          }
+                          if (!activeProfile.model) {
+                            alert('请先填写或选择模型名称');
                             return;
                           }
                           try {
-                            const endpoint = normalizeBaseUrl(activeProfile.baseUrl);
-                            const res = await fetch(endpoint, {
-                              method: 'POST',
-                              headers: {
-                                'Content-Type': 'application/json',
-                                'Authorization': `Bearer ${activeProfile.apiKey}`,
-                              },
-                              body: JSON.stringify({
-                                model: activeProfile.model || 'gemini-3-pro-preview-bs',
-                                messages: [{ role: 'user', content: '你好，请回复"连接成功"' }],
-                                max_tokens: 20,
-                              }),
-                            });
-                            if (res.ok) {
-                              alert('连接测试成功！');
-                            } else {
-                              const err = await res.text();
-                              alert(`连接失败 (${res.status}): ${err}`);
-                            }
+                            await chatWithAI([{ role: 'user', content: '你好，请回复"连接成功"' }]);
+                            alert('连接测试成功！');
                           } catch (e) {
                             alert(`连接失败：${e instanceof Error ? e.message : '网络错误'}`);
                           }
