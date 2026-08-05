@@ -6,6 +6,7 @@ import SkillForgeApp from './components/skillforge/SkillForgeApp';
 import { INITIAL_DATA } from './constants';
 import { ResumeData, ResumeVersion, StorageData } from './types';
 import { loadAISettings, loadAISettingsStore, saveAISettingsStore, normalizeBaseUrl, fetchModelList, AI_MODULES, type AISettings, type AIProfile, type AISettingsStore, type AIModuleKey } from './services/gemini';
+import { loadState, saveState } from './services/skillForgeStorage';
 
 type ActiveTab = 'resume' | 'skillforge';
 
@@ -101,10 +102,28 @@ const loadStorageData = (): StorageData => {
   return initStorageData();
 };
 
-// 导出数据到 JSON 文件
+export interface FullBackupPackage {
+  storageData: StorageData;
+  aiSettings?: AISettingsStore;
+  skillForge?: any;
+  defaultTemplate?: any;
+}
+
+// 导出全量数据到 JSON 文件（包含简历数据、AI配置、技能锻造JD分析记录等）
 const exportDataToFile = (data: StorageData, filename?: string) => {
+  let defaultTemplate = null;
+  try {
+    const rawTemplate = localStorage.getItem(DEFAULT_TEMPLATE_KEY);
+    if (rawTemplate) defaultTemplate = JSON.parse(rawTemplate);
+  } catch (e) {
+    console.error('Failed to parse default template for export:', e);
+  }
+
   const exportData = {
     ...data,
+    aiSettings: loadAISettingsStore(),
+    skillForge: loadState(),
+    defaultTemplate,
     exportedAt: Date.now(),
     version: '2.0'
   };
@@ -112,7 +131,7 @@ const exportDataToFile = (data: StorageData, filename?: string) => {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = filename || `简历备份_${new Date().toLocaleDateString('zh-CN').replace(/\//g, '-')}.json`;
+  a.download = filename || `简历全量备份_${new Date().toLocaleDateString('zh-CN').replace(/\//g, '-')}.json`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
@@ -123,7 +142,7 @@ const exportDataToFile = (data: StorageData, filename?: string) => {
 };
 
 // 从文件导入数据
-const importDataFromFile = (file: File): Promise<StorageData | null> => {
+const importDataFromFile = (file: File): Promise<FullBackupPackage | null> => {
   return new Promise((resolve) => {
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -133,7 +152,12 @@ const importDataFromFile = (file: File): Promise<StorageData | null> => {
 
         // 验证数据结构
         if (parsed.versions && parsed.versions.length > 0 && parsed.currentVersionId) {
-          resolve(migrateStorageData(parsed as StorageData));
+          resolve({
+            storageData: migrateStorageData(parsed as StorageData),
+            aiSettings: parsed.aiSettings,
+            skillForge: parsed.skillForge,
+            defaultTemplate: parsed.defaultTemplate
+          });
         } else {
           resolve(null);
         }
@@ -365,12 +389,33 @@ const App: React.FC = () => {
 
     const imported = await importDataFromFile(file);
     if (imported) {
-      if (confirm(`成功解析备份文件，包含 ${imported.versions.length} 个简历版本。\n\n是否覆盖当前数据？（当前数据将丢失）`)) {
-        setStorageData(imported);
-        alert('数据导入成功！');
+      const { storageData: importedStorageData, aiSettings: importedAiSettings, skillForge: importedSkillForge, defaultTemplate: importedDefaultTemplate } = imported;
+
+      const hasAi = !!(importedAiSettings && Array.isArray(importedAiSettings.profiles) && importedAiSettings.profiles.length > 0);
+      const sfJobsCount = importedSkillForge?.history?.length || 0;
+
+      let confirmMsg = `成功解析备份文件！包含以下模块：\n\n`;
+      confirmMsg += `• 简历版本：${importedStorageData.versions.length} 个\n`;
+      confirmMsg += `• AI 接口配置：${hasAi ? `已包含 (${importedAiSettings.profiles.length} 个 Api Profile)` : '未包含'}\n`;
+      confirmMsg += `• 技能锻造/JD分析历史：${sfJobsCount > 0 ? `已包含 (${sfJobsCount} 个岗位记录)` : '未包含'}\n`;
+      confirmMsg += `\n是否覆盖当前浏览器数据并导入？`;
+
+      if (confirm(confirmMsg)) {
+        setStorageData(importedStorageData);
+        if (hasAi) {
+          saveAISettingsStore(importedAiSettings);
+        }
+        if (importedSkillForge) {
+          saveState(importedSkillForge);
+        }
+        if (importedDefaultTemplate) {
+          localStorage.setItem(DEFAULT_TEMPLATE_KEY, JSON.stringify(importedDefaultTemplate));
+        }
+        alert('数据导入成功！页面即将自动刷新以加载完整配置。');
+        window.location.reload();
       }
     } else {
-      alert('导入失败：文件格式不正确');
+      alert('导入失败：文件格式不正确或损坏');
     }
 
     // 重置 input
