@@ -44,6 +44,7 @@ const migrateResumeData = (d: any): ResumeData => {
   if (!d.awards) d.awards = [];
   if (!d.certificates) d.certificates = [];
   if (d.evaluation === undefined) d.evaluation = '';
+  if (d.personalInfo && d.personalInfo.gender === undefined) d.personalInfo.gender = '男';
 
   // 为缺少 id 的 SkillEntry 补上 id
   if (d.skills) {

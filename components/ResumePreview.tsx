@@ -618,6 +618,12 @@ const ResumePreview: React.FC<Props> = ({ data, onChange }) => {
               {renderEditable("pi-email", data.personalInfo.email, (v) => handleUpdate('personalInfo.email', v))}
             </div>
           )}
+          {isFieldVisible('gender') && (
+            <div className="flex items-center gap-1">
+              <i className="fas fa-venus-mars" style={{ color: layout.themeColor, fontSize: '0.71em' }}></i>
+              {renderEditable("pi-gender", data.personalInfo.gender, (v) => handleUpdate('personalInfo.gender', v))}
+            </div>
+          )}
           {isFieldVisible('age') && (
             <div className="flex items-center gap-1">
               <i className="fas fa-birthday-cake" style={{ color: layout.themeColor, fontSize: '0.71em' }}></i>

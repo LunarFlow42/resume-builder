@@ -1052,6 +1052,7 @@ const ResumeEditor: React.FC<Props> = ({ data, onChange, darkMode }) => {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {[
             { label: '姓名', key: 'name', canHide: false },
+            { label: '性别', key: 'gender', canHide: true },
             { label: '年龄', key: 'age', canHide: true },
             { label: '电话', key: 'phone', canHide: true },
             { label: '邮箱', key: 'email', canHide: true },
