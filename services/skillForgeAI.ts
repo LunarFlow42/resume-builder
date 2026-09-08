@@ -1,8 +1,14 @@
 import { chatWithAIJson, ChatMessage, MessageContentPart } from './gemini';
 import { JobAnalysisResult, LearningAdvice, Skill, SkillStatus, RoadmapStep, SkillRoadmap } from '../skillforge/types';
 import { SKILL_CATEGORIES } from '../skillforge/constants';
+import { normalizeSkillName } from './skillForgeStorage';
 
-const JD_SYSTEM_PROMPT = `你是一个职位描述分析专家。请分析用户提供的 JD，提取所需的关键硬技能和软技能。
+const buildJdSystemPrompt = (existingSkills?: string[]) => {
+  const existingSection = existingSkills && existingSkills.length > 0
+    ? `\n7. 已有技能库参考：当前系统已记录以下技能：[${existingSkills.join(', ')}]。请优先复用已有技能的标准名称（例如若已有 'React'，请统一使用 'React'，不要返回 'React.js'、'React18' 或 'React框架'；若已有 'TypeScript'，不要返回 'TS'）。仅当岗位要求中包含库中不存在的新技术或新能力时，再创建新技能名称。`
+    : '';
+
+  return `你是一个职位描述分析专家。请分析用户提供的 JD，提取所需的关键硬技能和软技能。
 
 你必须返回严格的 JSON 对象，格式如下：
 {
@@ -12,7 +18,7 @@ const JD_SYSTEM_PROMPT = `你是一个职位描述分析专家。请分析用户
   "summary": "一句话总结该职位的核心要求（中文）",
   "skills": [
     {
-      "name": "技能名称（保留英文原名，如 React, TypeScript, Communication）",
+      "name": "技能名称（保留通用/行业标准原名，如 React, TypeScript, Java, Docker, Communication）",
       "category": "类别（必须是以下之一：${SKILL_CATEGORIES.join(', ')}）",
       "importance": "High 或 Medium 或 Low",
       "description": "该技能在此职位中的具体应用场景简述（中文）"
@@ -23,10 +29,11 @@ const JD_SYSTEM_PROMPT = `你是一个职位描述分析专家。请分析用户
 注意：
 1. summary 和 skills.description 必须用中文输出。
 2. skills.category 请尽量匹配给出的中文分类。
-3. skills.name 如果是专有名词请保留原文（如 React, Python），通用词汇可用中文。
+3. skills.name 如果是专有名词请保留行业通用命名（如 React, Python, Docker），通用软技能可用中文（如 团队协作, 跨部门沟通）。
 4. 根据提及的频率和语气确定技能的重要性。
 5. 只返回 JSON，不要有任何其他文字。
-6. 如果用户提供的是图片，请识别图片中的职位描述内容并按同样格式分析。`;
+6. 如果用户提供的是图片，请识别图片中的职位描述内容并按同样格式分析。${existingSection}`;
+};
 
 type ParsedJDData = {
   jobTitle: string;
@@ -44,7 +51,11 @@ type ParsedJDData = {
 /**
  * Parses a raw Job Description text (and/or image) into structured data using AI.
  */
-export const parseJobDescription = async (jdText: string, imageBase64?: string): Promise<JobAnalysisResult> => {
+export const parseJobDescription = async (
+  jdText: string,
+  imageBase64?: string,
+  existingSkills?: string[]
+): Promise<JobAnalysisResult> => {
   const userContent: MessageContentPart[] = [];
 
   if (imageBase64) {
@@ -60,19 +71,23 @@ export const parseJobDescription = async (jdText: string, imageBase64?: string):
   }
 
   const messages: ChatMessage[] = [
-    { role: 'system', content: JD_SYSTEM_PROMPT },
+    { role: 'system', content: buildJdSystemPrompt(existingSkills) },
     { role: 'user', content: userContent }
   ];
 
   const data = await chatWithAIJson<ParsedJDData>(messages, 'jd-parse');
 
-  // Hydrate with IDs and default status
-  const hydratedSkills: Skill[] = data.skills.map((s, index) => ({
-    ...s,
-    id: `skill-${index}-${Date.now()}`,
-    status: SkillStatus.LOCKED,
-    sourceJobIds: []
-  }));
+  // Hydrate with normalized names, IDs and default status
+  const hydratedSkills: Skill[] = data.skills.map((s, index) => {
+    const normalizedName = normalizeSkillName(s.name);
+    return {
+      ...s,
+      name: normalizedName,
+      id: `skill-${index}-${Date.now()}`,
+      status: SkillStatus.LOCKED,
+      sourceJobIds: []
+    };
+  });
 
   return {
     ...data,

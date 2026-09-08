@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { JobAnalysisResult, AppState, SkillStatus, AnalyzedJob } from '../../skillforge/types';
 import { parseJobDescription, generateSkillRoadmap } from '../../services/skillForgeAI';
-import { loadState, saveState, mergeSkills, clearState } from '../../services/skillForgeStorage';
+import { loadState, saveState, mergeSkills, clearState, normalizeSkillName } from '../../services/skillForgeStorage';
 import { AnalysisView } from './AnalysisView';
 import { ScannerView } from './ScannerView';
 import { SkillDetailPanel } from './SkillDetailPanel';
@@ -52,7 +52,12 @@ const SkillForgeApp: React.FC<SkillForgeAppProps> = ({ darkMode }) => {
     setIsAnalyzing(true);
     setError(null);
     try {
-      const result: JobAnalysisResult = await parseJobDescription(jdText, imageBase64 || undefined);
+      const existingSkillNames = appState.skills.map(s => s.name);
+      const result: JobAnalysisResult = await parseJobDescription(
+        jdText,
+        imageBase64 || undefined,
+        existingSkillNames
+      );
 
       // Generate job ID first
       const jobId = Date.now().toString();
@@ -60,16 +65,17 @@ const SkillForgeApp: React.FC<SkillForgeAppProps> = ({ darkMode }) => {
       // Inject sourceJobIds into new skills before merging
       const taggedSkills = result.skills.map(s => ({
         ...s,
+        name: normalizeSkillName(s.name),
         sourceJobIds: [jobId]
       }));
 
       // Merge Data
       const mergedSkills = mergeSkills(appState.skills, taggedSkills);
 
-      // Collect merged skill IDs that came from this JD (match by name)
-      const newSkillNames = new Set(taggedSkills.map(s => s.name.toLowerCase()));
+      // Collect merged skill IDs that came from this JD (match by normalized name)
+      const newSkillKeys = new Set(taggedSkills.map(s => normalizeSkillName(s.name).toLowerCase()));
       const jobSkillIds = mergedSkills
-        .filter(s => newSkillNames.has(s.name.toLowerCase()))
+        .filter(s => newSkillKeys.has(normalizeSkillName(s.name).toLowerCase()))
         .map(s => s.id);
 
       const newJobEntry: AnalyzedJob = {
