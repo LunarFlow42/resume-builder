@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ResumeData, ExperienceEntry } from '../types';
 import { paginateResume } from '../services/pagination';
+import ResumeIcon from './ResumeIcon';
 
 // 二维码组件
 const QRCodeImage: React.FC<{ url: string; className?: string }> = ({ url, className = "" }) => {
@@ -70,16 +71,15 @@ interface Props {
 const SectionHeader: React.FC<{ icon: string; title: string; themeColor: string }> = ({ icon, title, themeColor }) => (
   <div data-section-header="true" className="resume-section-header flex items-center gap-3 mb-3 pb-2 border-b-2" style={{ borderColor: themeColor }}>
     <div
-      className="section-icon text-white shrink-0 flex items-center justify-center leading-none"
+      className="section-icon text-white shrink-0 flex items-center justify-center"
       style={{
         backgroundColor: themeColor,
         width: '24px',
         height: '24px',
         borderRadius: '50%',
-        fontSize: '0.85em',
       }}
     >
-      <i className={`${icon} leading-none`}></i>
+      <ResumeIcon name={icon} className="w-3.5 h-3.5" />
     </div>
     <h2 className="font-bold tracking-wide text-slate-800" style={{ fontSize: '1.24em' }}>{title}</h2>
   </div>
@@ -527,43 +527,43 @@ const ResumePreview: React.FC<Props> = ({ data, onChange }) => {
         <div className="flex flex-wrap justify-center gap-x-6 gap-y-1 text-slate-600" style={{ fontSize: '0.86em' }}>
           {isFieldVisible('phone') && (
             <div className="flex items-center gap-1">
-              <i className="fas fa-phone" style={{ color: layout.themeColor, fontSize: '0.71em' }}></i>
+              <ResumeIcon name="fa-phone" className="w-3 h-3 shrink-0" style={{ color: layout.themeColor }} />
               {renderEditable("pi-phone", data.personalInfo.phone, (v) => handleUpdate('personalInfo.phone', v))}
             </div>
           )}
           {isFieldVisible('email') && (
             <div className="flex items-center gap-1">
-              <i className="fas fa-envelope" style={{ color: layout.themeColor, fontSize: '0.71em' }}></i>
+              <ResumeIcon name="fa-envelope" className="w-3 h-3 shrink-0" style={{ color: layout.themeColor }} />
               {renderEditable("pi-email", data.personalInfo.email, (v) => handleUpdate('personalInfo.email', v))}
             </div>
           )}
           {isFieldVisible('gender') && (
             <div className="flex items-center gap-1">
-              <i className="fas fa-venus-mars" style={{ color: layout.themeColor, fontSize: '0.71em' }}></i>
+              <ResumeIcon name="fa-venus-mars" className="w-3 h-3 shrink-0" style={{ color: layout.themeColor }} />
               {renderEditable("pi-gender", data.personalInfo.gender, (v) => handleUpdate('personalInfo.gender', v))}
             </div>
           )}
           {isFieldVisible('age') && (
             <div className="flex items-center gap-1">
-              <i className="fas fa-birthday-cake" style={{ color: layout.themeColor, fontSize: '0.71em' }}></i>
+              <ResumeIcon name="fa-birthday-cake" className="w-3 h-3 shrink-0" style={{ color: layout.themeColor }} />
               {renderEditable("pi-age", data.personalInfo.age, (v) => handleUpdate('personalInfo.age', v))}岁
             </div>
           )}
           {isFieldVisible('experience') && (
             <div className="flex items-center gap-1">
-              <i className="fas fa-briefcase" style={{ color: layout.themeColor, fontSize: '0.71em' }}></i>
+              <ResumeIcon name="fa-briefcase" className="w-3 h-3 shrink-0" style={{ color: layout.themeColor }} />
               {renderEditable("pi-experience", data.personalInfo.experience, (v) => handleUpdate('personalInfo.experience', v))}
             </div>
           )}
           {isFieldVisible('education') && (
             <div className="flex items-center gap-1">
-              <i className="fas fa-graduation-cap" style={{ color: layout.themeColor, fontSize: '0.71em' }}></i>
+              <ResumeIcon name="fa-graduation-cap" className="w-3 h-3 shrink-0" style={{ color: layout.themeColor }} />
               {renderEditable("pi-education", data.personalInfo.education, (v) => handleUpdate('personalInfo.education', v))}
             </div>
           )}
           {isFieldVisible('hometown') && (
             <div className="flex items-center gap-1">
-              <i className="fas fa-home" style={{ color: layout.themeColor, fontSize: '0.71em' }}></i>
+              <ResumeIcon name="fa-home" className="w-3 h-3 shrink-0" style={{ color: layout.themeColor }} />
               {renderEditable("pi-hometown", data.personalInfo.hometown, (v) => handleUpdate('personalInfo.hometown', v))}
             </div>
           )}
