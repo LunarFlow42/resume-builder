@@ -622,38 +622,100 @@ const ResumeEditor: React.FC<Props> = ({ data, onChange, darkMode }) => {
 
   // AI 预设提示 — 经历类
   const AI_PRESETS = [
-    { label: '综合优化', icon: 'fa-magic', prompt: '请综合优化这段简历内容，使其更专业、精炼，突出成就和可量化的结果。' },
-    { label: '数据量化', icon: 'fa-chart-bar', prompt: '请为这段内容添加具体的数据和量化指标（如百分比、数量、时间等），让成果更有说服力。如果原文没有具体数字，请根据上下文合理推测。' },
-    { label: 'STAR法则', icon: 'fa-star', prompt: '请参考STAR法则（情境-任务-行动-结果）的逻辑重新组织这段内容，使描述更有条理和说服力。注意：不要输出"情境："、"任务："等标签，写成自然流畅的段落。' },
-    { label: '精简压缩', icon: 'fa-compress-alt', prompt: '请将这段内容精简压缩到原来的60%左右篇幅，只保留最核心的信息，去掉冗余表达。' },
-    { label: '技术深度', icon: 'fa-code', prompt: '请加强这段内容的技术深度描述，突出使用的技术栈、解决的技术难题和技术方案选型。' },
-    { label: '领导力', icon: 'fa-users', prompt: '请优化这段内容，突出领导力、团队协作和沟通能力方面的表现。' },
+    {
+      label: 'Google XYZ 重构',
+      desc: '动词+方案+量化成果',
+      icon: 'fa-gem',
+      prompt: '请基于 Google XYZ 原则（通过 [方案Z] 达成 [成果Y] 解决 [痛点X]）重构这段经历。\n\n具体要求：\n1. 输出 2-3 条精炼有力的「•」要点（Bullet Points）；\n2. 每条要点必须以硬核主导型动作动词开头（如：主导、重构、设计、调优、封装、落地、沉淀），坚决避免“负责”、“参与”等弱动词；\n3. 突出采用的技术方案、工具库与业务/工程成效，严禁无中生有编造夸张虚假的业务数据；\n4. 若原文缺少明确数据，请从工程指标（首屏时间、打包体积、组件复用度、代码覆盖率等）切入，或使用 [提升约 X%] 清晰占位；\n5. 只输出纯文本要点，直接可用于简历，不要任何解释说明。'
+    },
+    {
+      label: 'STAR 深度拆解',
+      desc: '情境-任务-行动-结果闭环',
+      icon: 'fa-star',
+      prompt: '请运用 STAR 原则（情境-任务-行动-结果）深度梳理重构这段经历。\n\n具体要求：\n1. 提炼为 2-3 条「•」要点，完整体现技术背景/瓶颈（S/T）、攻坚举措与方案（A）、最终带来的技术收益或业务价值（R）；\n2. 严禁出现"情境："、"行动："等机械标签，融合成自然有力的高信息密度语句；\n3. 突出个人在解决问题过程中的核心贡献与关键技术抉择；\n4. 只输出优化后的纯文本要点。'
+    },
+    {
+      label: '大厂硬核技术深度',
+      desc: '深挖原理/架构与调优攻坚',
+      icon: 'fa-microchip',
+      prompt: '请针对大厂技术面试重点，强化这段经历的技术壁垒与工程深度。\n\n具体要求：\n1. 深入挖掘架构设计思想、核心机制与底层原理、技术选型权衡、难点攻坚以及性能调优全过程；\n2. 规范融入核心技术专有名词与技术生态；\n3. 输出 2-3 条高技术密度的「•」分点，展现攻坚复杂工程问题的硬实力；\n4. 只输出优化后的纯文本要点。'
+    },
+    {
+      label: '数据与工程量化',
+      desc: '突出真实指标与可衡量收益',
+      icon: 'fa-chart-line',
+      prompt: '请对这段经历进行工程指标与成果收益的量化提炼。\n\n具体要求：\n1. 重点提炼可度量的工程指标（如首屏耗时降幅、打包体积缩减、接口响应 QPS/耗时、组件复用率、CI 构建提效等）；\n2. 若原文无明确数据，请给出合理的工程度量维度，并在数值处使用「[X%]」或「[约 X ms]」清晰占位，严禁虚假捏造离谱的商业数据；\n3. 输出为 2-3 条「•」要点，每条以强动词开头；\n4. 只输出优化后的纯文本。'
+    },
+    {
+      label: 'ATS 高频词提纯',
+      desc: '大厂初筛匹配度最大化',
+      icon: 'fa-bullseye',
+      prompt: '请优化这段描述以全面契合主流招聘 ATS（简历筛选系统）的高频匹配算法。\n\n具体要求：\n1. 提炼并强化该岗位最核心的专业术语与技术栈关键词，提升初筛匹配权重；\n2. 语言表达专业地道，贴合头部科技公司对该岗位的通用能力模型；\n3. 结构清晰，输出为 2-3 条「•」要点；\n4. 只输出优化后的纯文本。'
+    },
+    {
+      label: '一页纸极限精简',
+      desc: '去粗取精，极致压缩篇幅',
+      icon: 'fa-compress-alt',
+      prompt: '请以“高密度、零废话”为原则大幅精炼压缩这段内容，使其适应一页纸排版。\n\n具体要求：\n1. 剔除所有“负责”、“参与”等套话废话，只保留最硬核的技术方案与成果主干；\n2. 压缩为 2 条极简的「•」要点，每条一句话讲清核心价值；\n3. 语言极具力量感，直接输出纯文本。'
+    },
   ];
 
   // AI 预设提示 — 技能类
   const SKILL_PRESETS = [
-    { label: '专业润色', icon: 'fa-pen-fancy', prompt: '请优化这段技能描述，使用更专业的行业术语，提升专业感。保持简洁的列举式风格。' },
-    { label: '补充技能', icon: 'fa-plus-circle', prompt: '根据已列出的技能，推断该候选人可能还掌握哪些相关技能，合理补充到描述中。保持同样的格式风格。' },
-    { label: '按熟练度排序', icon: 'fa-sort-amount-down', prompt: '请将这些技能按照从核心/熟练到一般/了解的顺序重新排列，把最重要的技能放在前面。' },
-    { label: '关键词优化', icon: 'fa-search', prompt: '请优化这段技能描述，确保包含该领域常见的ATS（简历筛选系统）关键词，提高简历通过机器筛选的概率。' },
-    { label: '分级描述', icon: 'fa-layer-group', prompt: '请为每项技能加上熟练程度描述（如精通/熟练/掌握/了解），使技能水平更清晰。保持简洁。' },
-    { label: '精简合并', icon: 'fa-compress-alt', prompt: '请精简合并这些技能描述，去掉重复和不重要的内容，只保留最有竞争力的技能点。' },
+    {
+      label: '大厂专业句式',
+      desc: '熟练度+技术栈+底层原理',
+      icon: 'fa-layer-group',
+      prompt: '请将技能描述重构为大厂技术面试认可的专业句式。\n\n具体要求：\n1. 采用“熟练掌握 [技术栈]，深入理解 [底层核心原理]，具备 [实战场景/调优] 经验”的标准句式改写；\n2. 突出技术深度与原理认知（如源码机制、架构设计、性能调优等），杜绝单词简单罗列；\n3. 专有名词使用官方标准大小写（如 TypeScript, React, Docker）；\n4. 只输出优化后的纯文本描述。'
+    },
+    {
+      label: '系统分类整合',
+      desc: '按模块维度结构化归类',
+      icon: 'fa-sitemap',
+      prompt: '请将当前技能点按专业技术维度分类整理（如：【核心基础】、【框架生态】、【工程化构建】、【服务端与工具】等）。\n\n具体要求：\n1. 每个分类提炼为 1 句高信息密度的专业描述；\n2. 层次分明，逻辑连贯，展现系统的全栈/专业知识树；\n3. 只输出优化后的纯文本描述。'
+    },
+    {
+      label: '底层原理深挖',
+      desc: '突出源码理解与底层机制',
+      icon: 'fa-code-branch',
+      prompt: '请在现有技能基础上，深入挖掘并突出核心机制与底层原理。\n\n具体要求：\n1. 重点补充对底层运行机制、设计模式、源码架构、并发控制或性能优化的理解；\n2. 展现从“API 使用者”到“底层原理通晓者”的技术深度；\n3. 语言严谨专业，只输出优化后的纯文本。'
+    },
+    {
+      label: '补充关联技能',
+      desc: '推断补充一线团队必备技能',
+      icon: 'fa-plus-circle',
+      prompt: '结合当前核心技术栈，推断并合理补充该技术方向在头部团队中最受青睐的高价值配套技术与工具（如自动化测试、CI/CD、微前端、构建优化、监控告警等）。\n\n具体要求：\n1. 以专业的行业通用句式自然融入；\n2. 避免盲目堆砌，只补充最相关、最有含金量的技能；\n3. 只输出优化后的纯文本。'
+    },
+    {
+      label: 'ATS 关键词规范',
+      desc: '校准专有名词与高频术语',
+      icon: 'fa-spell-check',
+      prompt: '请全面校准所有技能专有名词的大小写与行业官方标准拼写，并补充该领域 ATS 筛选最高频的核心技术关键词，提高简历初筛通过率。只输出优化后的纯文本。'
+    },
+    {
+      label: '紧凑提纯合并',
+      desc: '剔除基础项，只留核心杀手锏',
+      icon: 'fa-compress',
+      prompt: '请去粗取精，剔除基础或过时的技能点，只保留最具竞争力的 3-4 项核心硬核技能，提炼为精炼干练的专业语句。只输出优化后的纯文本。'
+    },
   ];
 
   // 快捷追问 — 经历类
   const EXPERIENCE_REFINES = [
-    { label: '更简洁', prompt: '请在当前版本基础上进一步精简，减少30%篇幅。' },
-    { label: '更详细', prompt: '请在当前版本基础上适当展开，补充更多细节。' },
-    { label: '加数据', prompt: '请在当前版本基础上补充具体的数据和量化指标。' },
-    { label: '换个写法', prompt: '请用完全不同的表达方式重新优化原文，给出另一种版本。' },
+    { label: '更强动词开头', prompt: '请将所有要点的开头动词升级为更具主导力和冲击力的硬核动词（如主导、重构、推演、攻克、落地），提升主动性和影响力。' },
+    { label: '强化底层原理', prompt: '请在此版本基础上，深入补充攻坚该问题时所运用的底层技术原理、设计模式或核心机制。' },
+    { label: '提炼为2个要点', prompt: '请将当前内容进一步提炼整合，只保留最硬核、最有说服力的 2 条「•」要点。' },
+    { label: '加入度量占位', prompt: '请在技术成果部分补充具体的工程量化指标，若不确定可用 [提升约 X%] 占位提醒填入。' },
+    { label: '换种写法', prompt: '请换一种完全不同的切入角度与叙述风格重新组织改写。' },
   ];
 
   // 快捷追问 — 技能类
   const SKILL_REFINES = [
-    { label: '再精简', prompt: '请进一步精简，去掉不重要的技能点。' },
-    { label: '补充更多', prompt: '请再补充几个相关的技能点。' },
-    { label: '换种格式', prompt: '请用另一种格式重新组织这些技能（如用逗号分隔、用分号分隔等）。' },
-    { label: '更专业', prompt: '请用更专业的术语重新描述这些技能。' },
+    { label: '增加原理深度', prompt: '请为主要技术栈增加对底层运行机制、设计哲学或性能优化的理解表述。' },
+    { label: '更精简一句话', prompt: '请压缩字数，精简为更紧凑有力的单句表达。' },
+    { label: '补充主流生态', prompt: '请补充该技术栈最常见的一线工程化工具或主流周边生态。' },
+    { label: '规范名词大小写', prompt: '请严格校对所有技术专有名词的官方标准大小写与专业拼写。' },
+    { label: '按熟练度排序', prompt: '请将技能按掌握深度从核心精通到熟悉熟练重新排序。' },
   ];
 
   const handleAI = async (text: string, section: string, callback: (newText: string) => void, type: 'experience' | 'skill' = 'experience') => {
@@ -671,24 +733,21 @@ const ResumeEditor: React.FC<Props> = ({ data, onChange, darkMode }) => {
     const systemMsg: ChatMessage = {
       role: 'system',
       content: isSkill
-        ? `你是一名专业的简历优化工具。你的唯一任务是根据用户要求优化简历中的技能描述。
+        ? `你是一名大厂技术面试官与资深职业顾问。你的任务是优化简历中的专业技能描述。
 
-严格规则：
-1. 只输出优化后的技能描述文本，不要输出任何其他内容
-2. 不要输出问候语、结束语、解释说明、建议备注等任何额外文字
-3. 不要使用Markdown格式（如加粗、标题、列表符号等）
-4. 保持简洁的列举风格，用逗号或顿号分隔各项技能
-5. 保持原文的真实背景信息，不捏造事实
-6. 输出必须是可以直接粘贴到简历技能栏的纯文本`
-        : `你是一名专业的简历优化工具。你的唯一任务是根据用户要求优化简历文本。
+【核心准则】：
+1. 采用专业句式（如：“熟练掌握 [技术栈]，深入理解 [底层原理/机制]，具备 [实战场景/调优] 经验”），拒绝无区分度的简单罗列。
+2. 专有名词务必严格遵守官方大小写规范（如 TypeScript, React, Vue 3, Docker, Node.js, Webpack, Git）。
+3. 实事求是，按掌握深度客观表述，体现技术进阶与技术攻坚深度。
+4. 只输出优化后的纯文本，严禁输出任何问候语、说明、解释或 Markdown 格式，确保内容可直接粘贴到简历中。`
+        : `你是一名顶级科技企业资深技术面试官与招聘专家。你的任务是重构和打磨简历中的经历描述。
 
-严格规则：
-1. 只输出优化后的简历文本本身，不要输出任何其他内容
-2. 不要输出问候语、结束语、解释说明、建议备注等任何额外文字
-3. 不要使用Markdown格式（如加粗、标题、列表符号等）
-4. 不要输出"情境："、"任务："、"行动："、"结果："等结构标签
-5. 保持原文的真实背景信息，不捏造事实
-6. 输出必须是可以直接粘贴到简历上的纯文本段落`
+【核心准则】：
+1. 遵循 Google XYZ 黄金法则：Accomplished [X], as measured by [Y], by doing [Z]（通过采用 [技术方案/架构选型 Z]，解决了 [痛点问题 X]，达成了 [可衡量的技术或业务成果 Y]）。
+2. 每项均以硬核动作动词开头（如：主导、重构、设计、调优、封装、落地、沉淀），坚决避免“负责”、“参与”等弱动词。
+3. 默认采用清晰的「•」分项输出（Bullet Points），每项 1~2 行，信息密度高、易于速读。
+4. 严禁无中生有编造夸张虚假的业务数据；若原文缺乏量化指标，应引导从工程质量指标（首屏时间、打包体积、组件复用度、代码覆盖率等）切入，或用 [提升约 X%] 规范占位。
+5. 只输出优化后的纯文本要点，严禁输出任何问候语、说明、标签（如“情境：”、“行动：”）或 Markdown 标题代码块，确保内容可直接粘贴到简历中。`
     };
 
     setAiDialog({
@@ -1172,16 +1231,23 @@ const ResumeEditor: React.FC<Props> = ({ data, onChange, darkMode }) => {
               {/* 预设按钮 — 首次交互时显示 */}
               {aiDialog.messages.length <= 2 && !aiDialog.loading && (
                 <div>
-                  <div className={`text-xs font-bold ${t.text3} mb-2`}>选择优化方向</div>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  <div className={`text-xs font-bold ${t.text3} mb-2`}>选择专业优化方向</div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
                     {(aiDialog.type === 'skill' ? SKILL_PRESETS : AI_PRESETS).map(preset => (
                       <button
                         key={preset.label}
                         onClick={() => handleAISend(preset.prompt)}
-                        className={`flex items-center gap-2 px-3 py-2.5 border ${t.dlgPreset} rounded-lg text-sm transition-all text-left`}
+                        className={`flex items-start gap-2.5 p-3 border ${t.dlgPreset} rounded-xl text-sm transition-all text-left group hover:scale-[1.01] hover:border-emerald-500/60`}
                       >
-                        <i className={`fas ${preset.icon} ${t.aiIcon}`}></i>
-                        <span className="font-medium">{preset.label}</span>
+                        <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-500 mt-0.5 shrink-0 group-hover:bg-emerald-500/20 transition-colors">
+                          <i className={`fas ${preset.icon} text-xs`}></i>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className={`font-bold text-xs sm:text-sm ${t.text1}`}>{preset.label}</div>
+                          {preset.desc && (
+                            <div className={`text-[11px] ${t.text4} mt-0.5 line-clamp-1`}>{preset.desc}</div>
+                          )}
+                        </div>
                       </button>
                     ))}
                   </div>
