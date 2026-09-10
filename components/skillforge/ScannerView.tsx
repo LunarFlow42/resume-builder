@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { AnalyzedJob } from '../../skillforge/types';
-import { loadAISettings, loadAISettingsStore, saveAISettingsStore, fetchModelList } from '../../services/gemini';
+import { loadAISettings, loadAISettingsStore, saveAISettingsStore, fetchModelList } from '../../services/ai';
 
 const getScannerTheme = (dark: boolean) => ({
   // Ambient effects

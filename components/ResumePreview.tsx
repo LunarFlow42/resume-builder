@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { ResumeData, ExperienceEntry } from '../types';
+import { paginateResume } from '../services/pagination';
 
 // 二维码组件
 const QRCodeImage: React.FC<{ url: string; className?: string }> = ({ url, className = "" }) => {
@@ -67,7 +68,7 @@ interface Props {
 
 // SectionHeader 通栏样式
 const SectionHeader: React.FC<{ icon: string; title: string; themeColor: string }> = ({ icon, title, themeColor }) => (
-  <div className="flex items-center gap-3 mb-3 pb-2 border-b-2" style={{ borderColor: themeColor }}>
+  <div data-section-header="true" className="resume-section-header flex items-center gap-3 mb-3 pb-2 border-b-2" style={{ borderColor: themeColor }}>
     <div
       className="section-icon text-white shrink-0 flex items-center justify-center"
       style={{
@@ -75,12 +76,12 @@ const SectionHeader: React.FC<{ icon: string; title: string; themeColor: string 
         width: '24px',
         height: '24px',
         borderRadius: '50%',
-        fontSize: '0.79em',
+        fontSize: '0.85em',
       }}
     >
       <i className={icon}></i>
     </div>
-    <h2 className="font-bold tracking-wide text-slate-800" style={{ fontSize: '1.07em' }}>{title}</h2>
+    <h2 className="font-bold tracking-wide text-slate-800" style={{ fontSize: '1.24em' }}>{title}</h2>
   </div>
 );
 
@@ -236,120 +237,39 @@ const ResumePreview: React.FC<Props> = ({ data, onChange }) => {
     if (!el) return;
 
     let isCalculating = false;
+    let pendingRecalc = false;
     let rafId: number;
     let unlockTimer: ReturnType<typeof setTimeout>;
 
-    const calculate = () => {
-      if (isCalculating) return;
+    const runCalculate = () => {
+      if (isCalculating) {
+        pendingRecalc = true;
+        return;
+      }
       isCalculating = true;
+      pendingRecalc = false;
 
-      const pxPerMm = el.offsetWidth / 210;
-      const pageH = 297 * pxPerMm;
-      if (pageH <= 0) { isCalculating = false; return; }
+      const result = paginateResume(el);
+      setPageBreaks(result.breaks);
 
-      // 1. 重置之前的分页避让 margin
-      el.querySelectorAll('[data-page-avoid]').forEach((e: Element) => {
-        (e as HTMLElement).style.marginTop = '';
-        (e as HTMLElement).removeAttribute('data-page-avoid');
-      });
-      void el.offsetHeight; // 强制回流
-
-      // 2. 收集需要保护的内容块
-      const mainEl = el.querySelector('main');
-      if (mainEl) {
-        const elRect = el.getBoundingClientRect();
-        const sections = Array.from(mainEl.querySelectorAll(':scope > section')) as HTMLElement[];
-
-        const blocks: { el: HTMLElement; top: number; height: number }[] = [];
-
-        for (const section of sections) {
-          const sRect = section.getBoundingClientRect();
-          const sTop = sRect.top - elRect.top;
-          const sHeight = sRect.height;
-
-          if (sHeight <= pageH * 0.8) {
-            // 小模块：整体保护不跨页
-            blocks.push({ el: section, top: sTop, height: sHeight });
-          } else {
-            // 大模块：保护标题不孤立 & 各子条目不被切割
-            const children = Array.from(section.children) as HTMLElement[];
-            if (children.length < 2) continue;
-
-            // 标题区保护：确保标题后至少跟 50px 内容在同一页
-            const headerRect = children[0].getBoundingClientRect();
-            const headerProtectionH = (headerRect.bottom - elRect.top) + 50 - sTop;
-            if (headerProtectionH > 0 && headerProtectionH < pageH * 0.5) {
-              blocks.push({ el: section, top: sTop, height: headerProtectionH });
-            }
-
-            if (children.length === 2) {
-              // 单容器子节点（如技能清单的 wrapper、自我评价的文本区）
-              const wrapper = children[1];
-              const items = Array.from(wrapper.children) as HTMLElement[];
-              for (let i = 1; i < items.length; i++) {
-                const item = items[i] as HTMLElement;
-                const iRect = item.getBoundingClientRect();
-                if (iRect.height > 5 && iRect.height < pageH * 0.8) {
-                  blocks.push({ el: item, top: iRect.top - elRect.top, height: iRect.height });
-                }
-              }
-            } else {
-              // 多条目子节点（如经历、教育条目）
-              for (let i = 2; i < children.length; i++) {
-                const child = children[i] as HTMLElement;
-                const cRect = child.getBoundingClientRect();
-                if (cRect.height > 5 && cRect.height < pageH * 0.8) {
-                  blocks.push({ el: child, top: cRect.top - elRect.top, height: cRect.height });
-                }
-              }
-            }
-          }
-        }
-
-        // 按位置排序
-        blocks.sort((a, b) => a.top - b.top);
-
-        // 3. 计算并应用避让 margin
-        let cumOffset = 0;
-        for (const block of blocks) {
-          const adjustedTop = block.top + cumOffset;
-          const adjustedBottom = adjustedTop + block.height;
-          const pageIdx = Math.floor(adjustedTop / pageH);
-          const nextPageStart = (pageIdx + 1) * pageH;
-
-          // 块跨越了分页线
-          if (adjustedTop < nextPageStart && adjustedBottom > nextPageStart) {
-            const onNextPage = adjustedBottom - nextPageStart;
-            const margin = nextPageStart - adjustedTop;
-            // 仅在：有实质内容被切到下页(>20px) & 浪费空间不超过页高25% & 块能放下一页
-            if (onNextPage > 20 && margin < pageH * 0.25 && block.height < pageH * 0.9) {
-              block.el.style.marginTop = `${margin}px`;
-              block.el.setAttribute('data-page-avoid', 'true');
-              cumOffset += margin;
-            }
-          }
-        }
-      }
-
-      // 4. 计算最终分页线位置
-      void el.offsetHeight;
-      const totalHeight = el.scrollHeight;
-      const breaks: number[] = [];
-      let y = pageH;
-      while (y < totalHeight - 10) {
-        breaks.push(y);
-        y += pageH;
-      }
-      setPageBreaks(breaks);
-
-      // 延迟释放锁，跳过 DOM 变化触发的 ResizeObserver 回调
       clearTimeout(unlockTimer);
-      unlockTimer = setTimeout(() => { isCalculating = false; }, 150);
+      unlockTimer = setTimeout(() => {
+        isCalculating = false;
+        if (pendingRecalc) {
+          runCalculate();
+        }
+      }, 100);
     };
 
-    const observer = new ResizeObserver(() => {
+    const scheduleCalculate = () => {
       cancelAnimationFrame(rafId);
-      rafId = requestAnimationFrame(calculate);
+      rafId = requestAnimationFrame(runCalculate);
+    };
+
+    scheduleCalculate();
+
+    const observer = new ResizeObserver(() => {
+      scheduleCalculate();
     });
 
     observer.observe(el);
@@ -374,9 +294,6 @@ const ResumePreview: React.FC<Props> = ({ data, onChange }) => {
     return (hiddenItems[section] || []).includes(itemId);
   };
 
-  // 计算相对字号
-  const baseFontSize = layout.fontSize || 14;
-  const fontSize = (ratio: number) => `${Math.round(baseFontSize * ratio)}px`;
 
   // 获取模块标题
   const getSectionTitle = (sectionKey: string) => sectionTitles[sectionKey] || DEFAULT_TITLES[sectionKey] || sectionKey;
@@ -432,18 +349,18 @@ const ResumePreview: React.FC<Props> = ({ data, onChange }) => {
         const visibleEdu = data.education.filter(edu => !isItemHidden('education', edu.id));
         if (visibleEdu.length === 0) return null;
         return (
-          <section key={sectionKey} className="mb-4">
+          <section key={sectionKey} data-section={sectionKey} className="resume-section mb-4">
             <SectionHeader icon={icon} title={title} themeColor={layout.themeColor} />
             {visibleEdu.map((edu) => (
-              <div key={edu.id} className="mb-2">
-                <div className="flex justify-between items-baseline font-bold mb-0.5" style={{ fontSize: '0.93em' }}>
+              <div key={edu.id} data-section-item="true" className="resume-item mb-2">
+                <div className="flex justify-between items-baseline font-bold mb-0.5" style={{ fontSize: '1.0em' }}>
                   {renderEditable(`edu-time-${edu.id}`, edu.timeline, (v) => handleArrayUpdate('education', edu.id, 'timeline', v), { className: "shrink-0" })}
                   {renderEditable(`edu-school-${edu.id}`, edu.school, (v) => handleArrayUpdate('education', edu.id, 'school', v), { className: "flex-1 text-center px-4" })}
                   {renderEditable(`edu-degree-${edu.id}`, edu.degree, (v) => handleArrayUpdate('education', edu.id, 'degree', v), { className: "shrink-0" })}
                   {renderEditable(`edu-major-${edu.id}`, edu.major, (v) => handleArrayUpdate('education', edu.id, 'major', v), { className: "shrink-0 ml-4" })}
                 </div>
                 {edu.details && (
-                  <div className="text-slate-600 leading-relaxed" style={{ fontSize: '0.79em' }}>
+                  <div className="text-slate-600 leading-relaxed" style={{ fontSize: '0.95em' }}>
                     {renderEditable(`edu-details-${edu.id}`, edu.details, (v) => handleArrayUpdate('education', edu.id, 'details', v), { className: "block", multiline: true })}
                   </div>
                 )}
@@ -461,16 +378,16 @@ const ResumePreview: React.FC<Props> = ({ data, onChange }) => {
         const visibleExpItems = expItems.filter(item => !isItemHidden(sectionKey, item.id));
         if (visibleExpItems.length === 0) return null;
         return (
-          <section key={sectionKey} className="mb-4">
+          <section key={sectionKey} data-section={sectionKey} className="resume-section mb-4">
             <SectionHeader icon={icon} title={title} themeColor={layout.themeColor} />
             {visibleExpItems.map((item) => (
-              <div key={item.id} className="mb-3 last:mb-0">
-                <div className="flex justify-between items-baseline font-bold mb-1" style={{ fontSize: '0.93em' }}>
+              <div key={item.id} data-section-item="true" className="resume-item mb-3 last:mb-0">
+                <div className="flex justify-between items-baseline font-bold mb-1" style={{ fontSize: '1.0em' }}>
                   {renderEditable(`${sectionKey}-time-${item.id}`, item.timeline, (v) => handleArrayUpdate(sectionKey as keyof ResumeData, item.id, 'timeline', v), { className: "shrink-0" })}
                   {renderEditable(`${sectionKey}-title-${item.id}`, item.title, (v) => handleArrayUpdate(sectionKey as keyof ResumeData, item.id, 'title', v), { className: "flex-1 text-center px-4" })}
                   {renderEditable(`${sectionKey}-role-${item.id}`, item.role, (v) => handleArrayUpdate(sectionKey as keyof ResumeData, item.id, 'role', v), { className: "shrink-0" })}
                 </div>
-                <div className="leading-[1.7] text-slate-700 text-justify" style={{ fontSize: '0.79em' }}>
+                <div className="leading-[1.7] text-slate-700 text-justify" style={{ fontSize: '0.95em' }}>
                   {renderEditable(`${sectionKey}-desc-${item.id}`, item.description, (v) => handleArrayUpdate(sectionKey as keyof ResumeData, item.id, 'description', v), { className: "block whitespace-pre-wrap", multiline: true })}
                 </div>
               </div>
@@ -484,9 +401,9 @@ const ResumePreview: React.FC<Props> = ({ data, onChange }) => {
         const visibleCertItems = certItems.filter(item => !isItemHidden(sectionKey, item.id));
         if (visibleCertItems.length === 0) return null;
         return (
-          <section key={sectionKey} className="mb-4">
+          <section key={sectionKey} data-section={sectionKey} className="resume-section mb-4">
             <SectionHeader icon={icon} title={title} themeColor={layout.themeColor} />
-            <div className="flex flex-wrap gap-x-6 gap-y-2" style={{ fontSize: '0.86em' }}>
+            <div data-section-item="true" className="resume-item flex flex-wrap gap-x-6 gap-y-2" style={{ fontSize: '0.95em' }}>
               {visibleCertItems.map((item) => (
                 <div key={item.id} className="flex items-center gap-1.5">
                   {item.timeline ? (
@@ -510,9 +427,9 @@ const ResumePreview: React.FC<Props> = ({ data, onChange }) => {
         const evalText = (data.evaluation as string | undefined) || '';
         if (!evalText) return null;
         return (
-          <section key={sectionKey} className="mb-4">
+          <section key={sectionKey} data-section={sectionKey} className="resume-section mb-4">
             <SectionHeader icon={icon} title={title} themeColor={layout.themeColor} />
-            <div className="leading-[1.7] text-slate-700 text-justify" style={{ fontSize: '0.86em' }}>
+            <div data-section-item="true" className="resume-item leading-[1.7] text-slate-700 text-justify" style={{ fontSize: '0.95em' }}>
               {renderEditable('evaluation-text', evalText, (v) => onChange({ ...data, evaluation: v }), { className: "block whitespace-pre-wrap", multiline: true })}
             </div>
           </section>
@@ -522,13 +439,13 @@ const ResumePreview: React.FC<Props> = ({ data, onChange }) => {
         const visibleSkills = (data.skills || []).filter(skill => !isItemHidden('skills', skill.id));
         if (visibleSkills.length === 0) return null;
         return (
-          <section key={sectionKey} className="mb-4">
+          <section key={sectionKey} data-section={sectionKey} className="resume-section mb-4">
             <SectionHeader icon={icon} title={title} themeColor={layout.themeColor} />
             <div className="space-y-1.5">
               {visibleSkills.map((skill) => {
                 const idx = data.skills.findIndex(s => s.id === skill.id);
                 return (
-                <div key={`skill-row-${skill.id}`} className="flex items-start" style={{ fontSize: '0.86em' }}>
+                <div key={`skill-row-${skill.id}`} data-section-item="true" className="resume-item flex items-start" style={{ fontSize: '0.95em' }}>
                   <div className="font-bold text-slate-800 shrink-0 w-[60px]">
                     {renderEditable(
                       `skill-cat-${skill.id}`,
@@ -565,6 +482,8 @@ const ResumePreview: React.FC<Props> = ({ data, onChange }) => {
     }
   };
 
+  const currentPt = layout.fontSize ?? 10.5;
+
   return (
     <div
       ref={containerRef}
@@ -572,7 +491,7 @@ const ResumePreview: React.FC<Props> = ({ data, onChange }) => {
       id="resume-content"
       style={{
         fontFamily: layout.fontFamily,
-        fontSize: `${layout.fontSize}px`,
+        fontSize: `${currentPt}pt`,
         lineHeight: layout.lineHeight,
         width: '210mm',
         minHeight: '297mm',

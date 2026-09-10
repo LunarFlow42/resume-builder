@@ -1,4 +1,4 @@
-import { chatWithAIJson, ChatMessage, MessageContentPart } from './gemini';
+import { chatWithAIJson, ChatMessage, MessageContentPart } from './ai';
 import { JobAnalysisResult, LearningAdvice, Skill, SkillStatus, RoadmapStep, SkillRoadmap } from '../skillforge/types';
 import { SKILL_CATEGORIES } from '../skillforge/constants';
 import { normalizeSkillName } from './skillForgeStorage';

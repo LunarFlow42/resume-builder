@@ -13,31 +13,11 @@ export const loadState = (): AppState => {
     const serialized = localStorage.getItem(STORAGE_KEY);
     if (!serialized) return DEFAULT_STATE;
     const parsed = JSON.parse(serialized);
-    // Backward compat: ensure sourceJobIds on skills and skillIds on jobs
-    const rawSkills: any[] = parsed.skills || [];
-    const rawHistory: any[] = parsed.history || [];
-
-    // Detect if migration is needed: any skill missing sourceJobIds means old data
-    const needsMigration = rawSkills.length > 0 && rawHistory.length > 0
-      && rawSkills.some((s: any) => !s.sourceJobIds || s.sourceJobIds.length === 0);
-
-    const allJobIds = rawHistory.map((j: any) => j.id);
-    const allSkillIds = rawSkills.map((s: any) => s.id);
-
-    const skills = rawSkills.map((s: any) => ({
-      ...s,
-      sourceJobIds: s.sourceJobIds && s.sourceJobIds.length > 0
-        ? s.sourceJobIds
-        : needsMigration ? [...allJobIds] : []
-    }));
-    const history = rawHistory.map((j: any) => ({
-      ...j,
-      salary: j.salary || '',
-      skillIds: j.skillIds && j.skillIds.length > 0
-        ? j.skillIds
-        : needsMigration ? [...allSkillIds] : []
-    }));
-    return { ...DEFAULT_STATE, ...parsed, skills, history, roadmaps: parsed.roadmaps || {} };
+    return {
+      skills: parsed.skills || [],
+      history: parsed.history || [],
+      roadmaps: parsed.roadmaps || {}
+    };
   } catch (e) {
     console.error("Failed to load state", e);
     return DEFAULT_STATE;

@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { ResumeData, EducationEntry, ExperienceEntry, SkillEntry, LayoutSettings } from '../types';
-import { chatWithAI, loadAISettings, type ChatMessage } from '../services/gemini';
+import { chatWithAI, loadAISettings, type ChatMessage } from '../services/ai';
 
 interface Props {
   data: ResumeData;
@@ -989,17 +989,17 @@ const ResumeEditor: React.FC<Props> = ({ data, onChange, darkMode }) => {
 
           {/* 字号 */}
           <div>
-            <label className={`text-xs ${t.text4} mb-1 block`}>字号</label>
+            <label className={`text-xs ${t.text4} mb-1 block`}>字号 (pt / 磅)</label>
             <select
-              value={data.layout.fontSize}
+              value={data.layout.fontSize ?? 10.5}
               onChange={(e) => updateLayout('fontSize', Number(e.target.value))}
               className={`w-full border ${t.input} p-1.5 rounded text-sm focus:border-emerald-500 outline-none`}
             >
-              <option value="12">12px - 小</option>
-              <option value="13">13px - 较小</option>
-              <option value="14">14px - 标准</option>
-              <option value="15">15px - 较大</option>
-              <option value="16">16px - 大</option>
+              <option value="9.5">9.5 pt (小五) - 紧凑精简</option>
+              <option value="10">10 pt - 常用适中</option>
+              <option value="10.5">10.5 pt (五号) - 简历黄金标准</option>
+              <option value="11">11 pt - 饱满清晰</option>
+              <option value="12">12 pt (小四) - 经历较少适用</option>
             </select>
           </div>
 

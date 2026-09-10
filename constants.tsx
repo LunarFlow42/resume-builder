@@ -10,13 +10,10 @@ export const INITIAL_DATA: ResumeData = {
     gender: "男",
     education: "本科",
     hometown: "湖北省-武汉市",
-    targetCity: "深圳市",
     jobIntent: {
       role: "前端开发工程师",
-      salary: "10k-15k",
       type: "全职"
     },
-    selfEvaluation: "请在此处输入您的自我评价。简要介绍您的专业背景、核心技术优势、学习能力以及工作态度。通过 AI 优化功能，您可以一键将本段文字转化为更加专业、精炼的职业履历表述。",
     qrCodeUrl: "https://github.com/LunarFlow42/resume-builder",
     qrCodeLabel: "扫码查看项目源码"
   },
@@ -52,14 +49,12 @@ export const INITIAL_DATA: ResumeData = {
     { id: "skill2", category: "专业技能", content: "熟练掌握 React / Vue，熟悉 TypeScript 与 ES6+ 语法" },
     { id: "skill3", category: "工具效率", content: "熟练使用 Git 工具流进行协同开发，熟悉 Docker 与 CI/CD 自动化构建" }
   ],
-  evaluation: '',
+  evaluation: "请在此处输入您的自我评价。简要介绍您的专业背景、核心技术优势、学习能力以及工作态度。通过 AI 优化功能，您可以一键将本段文字转化为更加专业、精炼的职业履历表述。",
   layout: {
     fontFamily: 'Microsoft YaHei',
-    fontSize: 14,
+    fontSize: 10.5,
     lineHeight: 1.55,
-    pagePadding: 1,
     themeColor: '#2b4766',
-    sectionStyle: 'classic',
     hiddenSections: ['campus', 'training', 'work', 'internship', 'awards'],
     hiddenFields: [],
     sectionOrder: ['skills', 'projects', 'education', 'certificates'],

@@ -8,7 +8,6 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.2/html2pdf.bundle.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode/1.5.1/qrcode.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/webfonts/fa-solid-900.woff2" as="font" type="font/woff2" crossorigin>
@@ -115,7 +114,22 @@
             }
         }
 
-        /* PDF导出时的打印样式 */
+        /* 模块与条目防跨页切割（CSS 层面双重保障） */
+        .resume-section-header {
+            break-after: avoid;
+            page-break-after: avoid;
+        }
+        .resume-item {
+            break-inside: avoid;
+            page-break-inside: avoid;
+        }
+
+        /* PDF导出及浏览器打印时的样式 */
+        @page {
+            size: A4 portrait;
+            margin: 0;
+        }
+
         @media print {
             * {
                 -webkit-print-color-adjust: exact !important;
@@ -126,7 +140,6 @@
             .resume-container {
                 box-shadow: none !important;
                 margin: 0 !important;
-                padding: 0 !important;
             }
 
             .sidebar-box {

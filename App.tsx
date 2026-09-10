@@ -3,9 +3,10 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import ResumeEditor from './components/ResumeEditor';
 import ResumePreview from './components/ResumePreview';
 import SkillForgeApp from './components/skillforge/SkillForgeApp';
+import { paginateResume } from './services/pagination';
 import { INITIAL_DATA } from './constants';
 import { ResumeData, ResumeVersion, StorageData } from './types';
-import { loadAISettings, loadAISettingsStore, saveAISettingsStore, normalizeBaseUrl, getEndpoint, fetchModelList, chatWithAI, AI_MODULES, type AISettings, type AIProfile, type AISettingsStore, type AIModuleKey, type APIProtocol } from './services/gemini';
+import { loadAISettings, loadAISettingsStore, saveAISettingsStore, getEndpoint, fetchModelList, chatWithAI, AI_MODULES, type AISettings, type AIProfile, type AISettingsStore, type AIModuleKey, type APIProtocol } from './services/ai';
 import { loadState, saveState } from './services/skillForgeStorage';
 
 type ActiveTab = 'resume' | 'skillforge';
@@ -68,10 +69,6 @@ const migrateResumeData = (d: any): ResumeData => {
       if (!d.layout.sectionTitles[k]) {
         d.layout.sectionTitles[k] = v;
       }
-    }
-    // 修正旧的合并标题
-    if (d.layout.sectionTitles.work === '工作/实习经历') {
-      d.layout.sectionTitles.work = '工作经历';
     }
   }
 
@@ -569,8 +566,13 @@ const App: React.FC = () => {
     // 移除分页参考线（不导出到 PDF）
     clone.querySelectorAll('[data-page-break]').forEach(el => el.remove());
 
-    // 等待渲染，让字体有时间加载和渲染
-    await new Promise(resolve => setTimeout(resolve, 500));
+    // 在 1:1 克隆体上执行精确智能分页排版，避免跨页切割
+    const { totalPages } = paginateResume(clone);
+    clone.style.minHeight = `${totalPages * 297}mm`;
+    clone.style.height = `${totalPages * 297}mm`;
+
+    // 等待渲染，让字体有时间加载和排版回流
+    await new Promise(resolve => setTimeout(resolve, 400));
 
     try {
       // @ts-ignore - 直接使用 html2canvas 和 jsPDF
@@ -612,11 +614,9 @@ const App: React.FC = () => {
       const A4_WIDTH = 210;
       const A4_HEIGHT = 297;
 
-      // 计算总高度对应的页数（减去 15 像素容差，防止 html2canvas 渲染时的 sub-pixel 舍入误差或微小的底边距溢出导致多出一页空白页）
       const canvasWidth = canvas.width;
       const canvasHeight = canvas.height;
       const pageHeightInCanvas = canvasWidth * (A4_HEIGHT / A4_WIDTH);
-      const totalPages = Math.max(1, Math.ceil((canvasHeight - 15) / pageHeightInCanvas));
 
       // 创建 PDF
       const pdf = new jsPDF({
@@ -628,25 +628,29 @@ const App: React.FC = () => {
       for (let page = 0; page < totalPages; page++) {
         if (page > 0) pdf.addPage();
 
-        // 裁剪当前页对应的 canvas 区域
+        // 裁剪当前页对应的 canvas 区域（保持标准 A4 比例画布）
         const pageCanvas = document.createElement('canvas');
         pageCanvas.width = canvasWidth;
-        const sliceHeight = Math.min(pageHeightInCanvas, canvasHeight - page * pageHeightInCanvas);
-        pageCanvas.height = sliceHeight;
+        pageCanvas.height = pageHeightInCanvas;
         const ctx = pageCanvas.getContext('2d')!;
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
-        ctx.drawImage(
-          canvas,
-          0, page * pageHeightInCanvas,     // source x, y
-          canvasWidth, sliceHeight,           // source w, h
-          0, 0,                               // dest x, y
-          canvasWidth, sliceHeight            // dest w, h
-        );
+
+        const sourceY = page * pageHeightInCanvas;
+        const sliceHeight = Math.min(pageHeightInCanvas, Math.max(0, canvasHeight - sourceY));
+
+        if (sliceHeight > 0) {
+          ctx.drawImage(
+            canvas,
+            0, sourceY,
+            canvasWidth, sliceHeight,
+            0, 0,
+            canvasWidth, sliceHeight
+          );
+        }
 
         const imgData = pageCanvas.toDataURL('image/jpeg', 0.98);
-        const imgHeight = (sliceHeight / canvasWidth) * A4_WIDTH;
-        pdf.addImage(imgData, 'JPEG', 0, 0, A4_WIDTH, imgHeight, undefined, 'FAST');
+        pdf.addImage(imgData, 'JPEG', 0, 0, A4_WIDTH, A4_HEIGHT, undefined, 'FAST');
       }
 
       pdf.save(`${currentVersion.name}_${data.personalInfo.name}.pdf`);

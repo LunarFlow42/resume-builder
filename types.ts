@@ -8,13 +8,10 @@ export interface PersonalInfo {
   gender: string;
   education: string;
   hometown: string;
-  targetCity: string;
   jobIntent: {
     role: string;
-    salary: string;
     type: string;
   };
-  selfEvaluation: string;
   qrCodeUrl?: string;
   qrCodeLabel?: string;
 }
@@ -46,9 +43,7 @@ export interface LayoutSettings {
   fontFamily: string;
   fontSize: number;
   lineHeight: number;
-  pagePadding: number;
   themeColor: string;
-  sectionStyle: 'classic' | 'modern' | 'minimal';
   hiddenSections: string[]; // 隐藏的模块列表
   hiddenFields: string[]; // 隐藏的字段列表
   hiddenItems?: Record<string, string[]>; // 隐藏的子条目 { sectionKey: [itemId, ...] }

@@ -52,23 +52,8 @@ export function loadAISettingsStore(): AISettingsStore {
     const saved = localStorage.getItem(AI_SETTINGS_KEY);
     if (saved) {
       const parsed = JSON.parse(saved);
-      // New multi-profile format
       if (parsed.profiles && Array.isArray(parsed.profiles)) {
         return parsed as AISettingsStore;
-      }
-      // Old single-settings format → migrate
-      if (parsed.baseUrl !== undefined) {
-        const migrated: AIProfile = {
-          id: generateProfileId(),
-          name: parsed.baseUrl ? new URL(parsed.baseUrl.startsWith('http') ? parsed.baseUrl : `https://${parsed.baseUrl}`).host || '默认' : '默认',
-          baseUrl: parsed.baseUrl || '',
-          apiKey: parsed.apiKey || '',
-          model: parsed.model || '',
-          apiProtocol: 'openai'
-        };
-        const store: AISettingsStore = { activeProfileId: migrated.id, profiles: [migrated] };
-        localStorage.setItem(AI_SETTINGS_KEY, JSON.stringify(store));
-        return store;
       }
     }
   } catch (e) {
@@ -76,7 +61,6 @@ export function loadAISettingsStore(): AISettingsStore {
   }
   // Empty store with one blank profile
   const blank: AIProfile = { id: generateProfileId(), name: '默认', baseUrl: '', apiKey: '', model: '', apiProtocol: 'openai' };
-  return { activeProfileId: blank.id, profiles: [blank] };
 }
 
 export function saveAISettingsStore(store: AISettingsStore): void {
@@ -102,19 +86,6 @@ export function loadAISettings(moduleKey?: AIModuleKey): AISettings {
     model,
     apiProtocol: active.apiProtocol || 'openai'
   };
-}
-
-/**
- * @deprecated Use saveAISettingsStore() for multi-profile support.
- * Kept for backward compat — updates the active profile in-place.
- */
-export function saveAISettings(settings: AISettings): void {
-  const store = loadAISettingsStore();
-  const idx = store.profiles.findIndex(p => p.id === store.activeProfileId);
-  if (idx >= 0) {
-    store.profiles[idx] = { ...store.profiles[idx], ...settings };
-  }
-  saveAISettingsStore(store);
 }
 
 /**
@@ -156,12 +127,6 @@ export function getEndpoint(baseUrl: string, protocol: APIProtocol = 'openai', m
   return u + '/v1/chat/completions';
 }
 
-/**
- * @deprecated 兼容保留
- */
-export function normalizeBaseUrl(url: string): string {
-  return getEndpoint(url, 'openai');
-}
 
 /**
  * 从 base URL 推导出模型列表端点
