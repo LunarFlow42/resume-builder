@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import html2canvas from 'html2canvas-pro';
 import ResumeEditor from './components/ResumeEditor';
 import ResumePreview from './components/ResumePreview';
 import SkillForgeApp from './components/skillforge/SkillForgeApp';
@@ -575,8 +576,6 @@ const App: React.FC = () => {
     await new Promise(resolve => setTimeout(resolve, 400));
 
     try {
-      // @ts-ignore - 直接使用 html2canvas 和 jsPDF
-      const html2canvas = window.html2canvas;
       // @ts-ignore
       const jsPDF = window.jspdf?.jsPDF || window.jsPDF;
 
