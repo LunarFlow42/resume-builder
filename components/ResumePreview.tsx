@@ -70,7 +70,7 @@ interface Props {
 const SectionHeader: React.FC<{ icon: string; title: string; themeColor: string }> = ({ icon, title, themeColor }) => (
   <div data-section-header="true" className="resume-section-header flex items-center gap-3 mb-3 pb-2 border-b-2" style={{ borderColor: themeColor }}>
     <div
-      className="section-icon text-white shrink-0 flex items-center justify-center"
+      className="section-icon text-white shrink-0 flex items-center justify-center leading-none"
       style={{
         backgroundColor: themeColor,
         width: '24px',
@@ -79,7 +79,7 @@ const SectionHeader: React.FC<{ icon: string; title: string; themeColor: string 
         fontSize: '0.85em',
       }}
     >
-      <i className={icon}></i>
+      <i className={`${icon} leading-none`}></i>
     </div>
     <h2 className="font-bold tracking-wide text-slate-800" style={{ fontSize: '1.24em' }}>{title}</h2>
   </div>

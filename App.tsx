@@ -592,21 +592,7 @@ const App: React.FC = () => {
         scrollY: 0,
         backgroundColor: '#ffffff',
         windowWidth: clone.scrollWidth,
-        windowHeight: clone.scrollHeight,
-        onclone: (clonedDoc: Document) => {
-          // html2canvas 对字体垂直位置渲染有偏差，用 padding 补偿
-          // 原始居中逻辑：height:18 + paddingBottom:10 = 总高28px
-          // 设 width 也为 28px 使 border-radius:50% 渲染为正圆
-          const iconContainers = clonedDoc.querySelectorAll('.section-icon');
-          iconContainers.forEach((container: any) => {
-            container.style.paddingBottom = '10px';
-            container.style.paddingTop = '0px';
-            container.style.boxSizing = 'content-box';
-            container.style.height = '18px';
-            container.style.width = '28px';
-            container.style.borderRadius = '50%';
-          });
-        }
+        windowHeight: clone.scrollHeight
       });
 
       // A4 尺寸 (mm)
