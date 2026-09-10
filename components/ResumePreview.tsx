@@ -187,10 +187,14 @@ const EditableText: React.FC<EditableTextProps> = ({
     );
   }
 
+  const isInline = className.includes('inline') && !className.includes('inline-block');
+  const isBlock = className.includes('block') && !className.includes('inline-block');
+  const displayClass = isInline ? 'inline' : isBlock ? 'block' : 'inline-block';
+
   return (
     <div
       onClick={(e) => { e.stopPropagation(); setEditingField(id); }}
-      className={`editable-field transition-all rounded inline-block min-w-[5px] ${className}`}
+      className={`editable-field transition-all rounded ${displayClass} min-w-[5px] ${className}`}
       style={style}
     >
       {value || (placeholder !== undefined ? placeholder : <span className="italic opacity-30">...</span>)}
@@ -445,20 +449,32 @@ const ResumePreview: React.FC<Props> = ({ data, onChange }) => {
               {visibleSkills.map((skill) => {
                 const idx = data.skills.findIndex(s => s.id === skill.id);
                 return (
-                <div key={`skill-row-${skill.id}`} data-section-item="true" className="resume-item flex items-start" style={{ fontSize: '0.95em' }}>
-                  <div className="font-bold text-slate-800 shrink-0 w-[60px]">
-                    {renderEditable(
-                      `skill-cat-${skill.id}`,
-                      skill.category,
-                      (v) => {
-                        const newList = [...data.skills];
-                        if (idx !== -1) newList[idx] = { ...newList[idx], category: v };
-                        onChange({ ...data, skills: newList });
-                      }
+                <div
+                  key={`skill-row-${skill.id}`}
+                  data-section-item="true"
+                  className="resume-item flex items-start text-slate-700 leading-[1.65]"
+                  style={{ fontSize: '0.95em' }}
+                >
+                  <span
+                    className="w-1.5 h-1.5 rounded-full shrink-0 mr-2 mt-[7px]"
+                    style={{ backgroundColor: layout.themeColor }}
+                  />
+                  <div className="flex-1 text-justify">
+                    {(skill.category || editingField === `skill-cat-${skill.id}`) && (
+                      <span className="font-bold text-slate-800">
+                        {renderEditable(
+                          `skill-cat-${skill.id}`,
+                          skill.category,
+                          (v) => {
+                            const newList = [...data.skills];
+                            if (idx !== -1) newList[idx] = { ...newList[idx], category: v };
+                            onChange({ ...data, skills: newList });
+                          },
+                          { className: "font-bold text-slate-800 inline", placeholder: "技能类别" }
+                        )}
+                        <span className="font-bold text-slate-800 mr-1.5">：</span>
+                      </span>
                     )}
-                  </div>
-                  <span className="text-slate-400 font-bold mx-2">:</span>
-                  <div className="text-slate-700 leading-normal flex-1">
                     {renderEditable(
                       `skill-cont-${skill.id}`,
                       skill.content,
@@ -467,7 +483,7 @@ const ResumePreview: React.FC<Props> = ({ data, onChange }) => {
                         if (idx !== -1) newList[idx] = { ...newList[idx], content: v };
                         onChange({ ...data, skills: newList });
                       },
-                      { className: "block", multiline: true }
+                      { className: "inline", multiline: true, placeholder: "技能详细描述..." }
                     )}
                   </div>
                 </div>
