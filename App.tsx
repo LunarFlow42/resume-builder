@@ -711,7 +711,28 @@ const App: React.FC = () => {
           rel="noopener noreferrer"
           className="flex items-center gap-2 sm:gap-4 group"
         >
-          <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-br from-emerald-500 to-cyan-500 rounded-lg flex items-center justify-center text-white font-black text-lg sm:text-xl shadow-lg shadow-emerald-900/30 group-hover:scale-105 transition-transform duration-200">R</div>
+          <svg
+            className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg shadow-lg shadow-emerald-900/30 group-hover:scale-105 transition-transform duration-200 shrink-0"
+            viewBox="0 0 64 64"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <defs>
+              <linearGradient id="header-logo-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#1e293b" />
+                <stop offset="100%" stopColor="#059669" />
+              </linearGradient>
+            </defs>
+            <rect width="64" height="64" rx="16" fill="url(#header-logo-bg)" />
+            <path d="M18 13 h20 l10 10 v26 a3 3 0 0 1 -3 3 H18 a3 3 0 0 1 -3 -3 V16 a3 3 0 0 1 3 -3 z" fill="#ffffff" />
+            <path d="M38 13 v8 a2 2 0 0 0 2 2 h8 z" fill="#94a3b8" />
+            <circle cx="24" cy="23" r="3.5" fill="#059669" />
+            <rect x="30" y="21" width="12" height="4" rx="2" fill="#0f172a" />
+            <rect x="20" y="31" width="24" height="3" rx="1.5" fill="#059669" fillOpacity="0.85" />
+            <rect x="20" y="37" width="18" height="2.5" rx="1.2" fill="#64748b" />
+            <rect x="20" y="42" width="22" height="2.5" rx="1.2" fill="#94a3b8" />
+            <rect x="20" y="47" width="14" height="2.5" rx="1.2" fill="#cbd5e1" />
+          </svg>
           <div>
             <div className="flex items-center gap-1.5 mb-1">
               <h1 className={`text-lg font-bold ${t.logo} leading-none`}>简历专家</h1>
