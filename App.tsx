@@ -512,6 +512,86 @@ const App: React.FC = () => {
     }
   };
 
+/**
+ * 提取当前页面所有生效的样式规则并合并为字符串。
+ * 生产构建（如 Vercel）中，Tailwind CSS 会被打包为外部独立文件 <link rel="stylesheet" href="/assets/index-xxx.css">。
+ * html2canvas 渲染时会在隐藏的 about:blank 沙箱 iframe 中克隆 DOM。
+ * 由于沙箱环境对外部异步样式表可能未完成加载即开始绘制，导致出现 Tailwind 布局样式完全丢失（flex/grid/absolute 失效、纵向坍塌）。
+ * 通过预先同步提取全量 CSS 规则并内嵌注入到克隆沙箱中，彻底消除异步加载时序与沙箱限制问题。
+ */
+const collectAllDocumentStyles = async (): Promise<string> => {
+  let allCss = '';
+
+  const extractRules = (sheet: CSSStyleSheet): string => {
+    let css = '';
+    try {
+      const rules = sheet.cssRules || sheet.rules;
+      if (rules && rules.length > 0) {
+        for (let i = 0; i < rules.length; i++) {
+          const rule = rules[i];
+          if ('styleSheet' in rule && (rule as any).styleSheet) {
+            css += extractRules((rule as any).styleSheet);
+          } else if (rule.cssText) {
+            css += rule.cssText + '\n';
+          }
+        }
+      }
+    } catch {
+      // 跨域或同源限制时捕获，留给下方的 fetch 兜底
+    }
+    return css;
+  };
+
+  const processedHrefs = new Set<string>();
+
+  // 1. 从 document.styleSheets 中提取已解析的 CSSOM 规则
+  for (const sheet of Array.from(document.styleSheets)) {
+    if (sheet.href) processedHrefs.add(sheet.href);
+    const css = extractRules(sheet);
+    if (css) {
+      allCss += css + '\n';
+    } else if (sheet.href) {
+      // 降级兜底：如果 cssRules 因跨域不可读，直接 fetch 样式文本
+      try {
+        const resp = await fetch(sheet.href);
+        if (resp.ok) {
+          allCss += (await resp.text()) + '\n';
+        }
+      } catch (err) {
+        console.warn('Failed to fetch stylesheet fallback:', sheet.href, err);
+      }
+    }
+  }
+
+  // 2. 补漏：检查是否有 DOM 中存在但 styleSheets 集合未完全覆盖的 link 标签
+  const linkEls = Array.from(document.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]'));
+  for (const link of linkEls) {
+    if (link.href && !processedHrefs.has(link.href)) {
+      processedHrefs.add(link.href);
+      try {
+        const resp = await fetch(link.href);
+        if (resp.ok) {
+          allCss += (await resp.text()) + '\n';
+        }
+      } catch (err) {
+        console.warn('Failed to fetch link stylesheet fallback:', link.href, err);
+      }
+    }
+  }
+
+  // 3. 补漏：收集页面内现有的 <style> 标签
+  const styleEls = Array.from(document.querySelectorAll<HTMLStyleElement>('style'));
+  for (const s of styleEls) {
+    if (s.id !== 'pdf-inlined-styles' && s.textContent) {
+      if (!allCss.includes(s.textContent.slice(0, 50))) {
+        allCss += s.textContent + '\n';
+      }
+    }
+  }
+
+  return allCss;
+};
+
   const handleExportPDF = async () => {
     const sourceElement = document.getElementById('resume-content');
     if (!sourceElement) return;
@@ -527,6 +607,9 @@ const App: React.FC = () => {
     } catch (e) {
       console.warn('Font loading check failed:', e);
     }
+
+    // 提取全局全量样式表，确保在沙箱 iframe 中 100% 具备所有 Tailwind 类名与样式
+    const allCss = await collectAllDocumentStyles();
 
     // 创建一个全屏白色遮罩层，将克隆元素放在可见位置
     const overlay = document.createElement('div');
@@ -562,6 +645,14 @@ const App: React.FC = () => {
       background-image: none !important;
     `;
 
+    // 将提取的样式表同步植入克隆体顶部
+    if (allCss) {
+      const styleEl = document.createElement('style');
+      styleEl.id = 'pdf-inlined-styles';
+      styleEl.textContent = allCss;
+      clone.insertBefore(styleEl, clone.firstChild);
+    }
+
     overlay.appendChild(clone);
 
     // 移除分页参考线（不导出到 PDF）
@@ -592,7 +683,31 @@ const App: React.FC = () => {
         scrollY: 0,
         backgroundColor: '#ffffff',
         windowWidth: clone.scrollWidth,
-        windowHeight: clone.scrollHeight
+        windowHeight: clone.scrollHeight,
+        ignoreElements: (el) => {
+          // 忽略外部 link stylesheet，防止沙箱在 about:blank 发起可能失败或慢速的异步请求
+          if (el.tagName === 'LINK' && el.getAttribute('rel') === 'stylesheet') {
+            return true;
+          }
+          return false;
+        },
+        onclone: async (clonedDoc) => {
+          // 1. 同步将全量提取的样式注入克隆沙箱 iframe 的 head
+          if (allCss) {
+            const headStyle = clonedDoc.createElement('style');
+            headStyle.id = 'pdf-inlined-styles-head';
+            headStyle.textContent = allCss;
+            clonedDoc.head.appendChild(headStyle);
+          }
+
+          // 2. 双重保险：移除 iframe 中的外部样式表 link
+          clonedDoc.querySelectorAll('link[rel="stylesheet"]').forEach(l => l.remove());
+
+          // 3. 等待沙箱字体完全就绪
+          if (clonedDoc.fonts && clonedDoc.fonts.ready) {
+            await clonedDoc.fonts.ready;
+          }
+        }
       });
 
       // A4 尺寸 (mm)

@@ -104,6 +104,8 @@ export const ResumeIcon: React.FC<ResumeIconProps> = ({ name, className = '', st
     return (
       <svg
         viewBox={`0 0 ${def.width} ${def.height}`}
+        width="1em"
+        height="1em"
         className={`inline-block shrink-0 fill-current ${className}`}
         style={style}
         aria-hidden="true"
